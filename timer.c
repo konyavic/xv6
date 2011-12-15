@@ -1,32 +1,90 @@
-// Intel 8253/8254/82C54 Programmable Interval Timer (PIT).
-// Only used on uniprocessors;
-// SMP machines use the local APIC timer.
-
 #include "types.h"
 #include "defs.h"
-#include "traps.h"
-#include "x86.h"
+#include "param.h"
+#include "mmu.h"
+#include "sh4.h"
+#include "proc.h"
+#include "spinlock.h"
 
-#define IO_TIMER1       0x040           // 8253 Timer #1
+void do_timer(void);
 
-// Frequency of all three count-down timers;
-// (TIMER_FREQ/freq) is the appropriate count
-// to generate a frequency of freq Hz.
-
-#define TIMER_FREQ      1193182
-#define TIMER_DIV(x)    ((TIMER_FREQ+(x)/2)/(x))
-
-#define TIMER_MODE      (IO_TIMER1 + 3) // timer mode port
-#define TIMER_SEL0      0x00    // select counter 0
-#define TIMER_RATEGEN   0x04    // mode 2, rate generator
-#define TIMER_16BIT     0x30    // r/w counter 16 bits, LSB first
-
-void
-timerinit(void)
+void timer_init(void)
 {
-  // Interrupt 100 times/sec.
-  outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
-  outb(IO_TIMER1, TIMER_DIV(100) % 256);
-  outb(IO_TIMER1, TIMER_DIV(100) / 256);
-  picenable(IRQ_TIMER);
+  /* stop count TCNTx (not change other TCNT)*/
+#if defined(SH7780) || defined(SH7751)
+  TMU.TSTR &= ~TMU_STR0;
+#elif defined(RP1)
+  TMU.TSTR&=~TMU_STR5;
+#endif
+
+  /* set timer constant. */
+#if defined(SH7780) || defined(SH7751)
+  TMU.TCOR0 = TIMER_RATE;
+  TMU.TCNT0 = TIMER_RATE;
+#elif defined(RP1)
+  TMU.TCOR2 = TIMER_RATE;
+  TMU.TCNT2 = TIMER_RATE;
+#endif
+
+  /* enable interrupts, counts Pck/3 clock */
+#if defined(SH7780) || defined(SH7751)
+  TMU.TCR0 &= ~(TCR_UNF_BIT|TCR_UNIE_BIT|TCR_CKEG_MASK|TCR_TPSC_MASK);
+#elif defined(RP1)
+  TMU.TCR2 &= ~(TCR_UNF_BIT|TCR_UNIE_BIT|TCR_CKEG_MASK|TCR_TPSC_MASK);
+#endif
+  
+  /* clear under flowflag */
+#if defined(SH7780) || defined(SH7751)
+  TMU.TCR0 |= (TCR_UNIE_BIT | TCR_TPSC_PCK4);
+#elif defined(RP1)
+  TMU.TCR2 |= (TCR_UNIE_BIT | TCR_TPSC_PCK4);
+#endif
+
+#if defined(SH7751)
+  IPRA_TMU0(TINTLVL);
+  register_handler(TMU0_INTEVT, do_timer);
+#elif defined(SH7780)
+  IPRA_TMU3(TINTLVL << 1);  /* set interrupt level */
+  *IMSKC = IMSK_TMU345;     /* set interrupt mask */
+  register_handler(TMU3_INTEVT, do_timer);
+#elif defined(RP1)
+  IPRA_TMU5(TINTLVL);
+  *IMSKC0 = IMSK_TMU5;
+  register_handler(TMU5_INTEVT, do_timer);
+#endif
+
+  /* start timer */
+#if defined(SH7780) || defined(SH7751)
+  TMU.TSTR |= TMU_STR0;
+#elif defined(RP1)
+  TMU.TSTR |= TMU_STR5;
+#endif
+}
+
+void do_timer(void)
+{
+#if defined(SH7780) || defined(SH7751)
+  TMU.TCR0 &= ~TCR_UNF;
+#elif defined(RP1)
+  TMU.TCR2 &= ~TCR_UNF;
+#endif
+  if(cpu->id == 0){
+    acquire(&tickslock);
+    ticks++;
+    wakeup(&ticks);
+    release(&tickslock);
+  }
+  if(proc && proc->killed)
+    exit();
+
+  // Force process to give up CPU on clock tick.
+  // If interrupts were on while locks held, would need to check nlock.
+  if(proc && proc->state == RUNNING)
+    yield();
+
+  // Check if the process has been killed since we yielded
+  if(proc && proc->killed)
+    exit();
+
+  return;
 }

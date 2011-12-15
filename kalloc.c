@@ -17,19 +17,18 @@ struct {
   struct run *freelist;
 } kmem;
 
+extern unsigned const char *__bss_end;
+
 // Initialize free list of physical pages.
 void
 kinit(void)
 {
-  extern char end[];
-
   initlock(&kmem.lock, "kmem");
-  char *p = (char*)PGROUNDUP((uint)end);
+  char *p = (char*)PGROUNDUP((uint)&__bss_end);
   for( ; p + PGSIZE - 1 < (char*) PHYSTOP; p += PGSIZE)
     kfree(p);
 }
 
-//PAGEBREAK: 21
 // Free the page of physical memory pointed at by v,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
@@ -62,9 +61,14 @@ kalloc()
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r) {
     kmem.freelist = r->next;
+    memset(r, 0, PGSIZE);
+  }
   release(&kmem.lock);
+#ifdef DEBUG
+  cprintf("%s: 0x%x\n", __func__, r);
+#endif
   return (char*) r;
 }
 

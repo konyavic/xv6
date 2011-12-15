@@ -2,6 +2,8 @@
 #include "stat.h"
 #include "user.h"
 
+#include <stdarg.h>
+
 static void
 putc(int fd, char c)
 {
@@ -14,7 +16,7 @@ printint(int fd, int xx, int base, int sgn)
   static char digits[] = "0123456789ABCDEF";
   char buf[16];
   int i, neg;
-  uint x;
+  int x;
 
   neg = 0;
   if(sgn && xx < 0){
@@ -41,10 +43,10 @@ printf(int fd, char *fmt, ...)
 {
   char *s;
   int c, i, state;
-  uint *ap;
+  va_list ap;
 
   state = 0;
-  ap = (uint*)(void*)&fmt + 1;
+  va_start(ap, fmt);
   for(i = 0; fmt[i]; i++){
     c = fmt[i] & 0xff;
     if(state == 0){
@@ -55,14 +57,11 @@ printf(int fd, char *fmt, ...)
       }
     } else if(state == '%'){
       if(c == 'd'){
-        printint(fd, *ap, 10, 1);
-        ap++;
+        printint(fd, va_arg(ap, int), 10, 1);
       } else if(c == 'x' || c == 'p'){
-        printint(fd, *ap, 16, 0);
-        ap++;
+        printint(fd, va_arg(ap, int), 16, 0);
       } else if(c == 's'){
-        s = (char*)*ap;
-        ap++;
+        s = (char*) va_arg(ap, char *);
         if(s == 0)
           s = "(null)";
         while(*s != 0){
@@ -70,8 +69,7 @@ printf(int fd, char *fmt, ...)
           s++;
         }
       } else if(c == 'c'){
-        putc(fd, *ap);
-        ap++;
+        putc(fd, va_arg(ap, int));
       } else if(c == '%'){
         putc(fd, c);
       } else {
@@ -82,4 +80,5 @@ printf(int fd, char *fmt, ...)
       state = 0;
     }
   }
+  va_end(ap);
 }

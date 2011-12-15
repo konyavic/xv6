@@ -1,3 +1,5 @@
+struct cpu;
+struct proc;
 struct buf;
 struct context;
 struct file;
@@ -15,7 +17,7 @@ void            bwrite(struct buf*);
 
 // console.c
 void            consoleinit(void);
-void            cprintf(char*, ...);
+void            cprintf(const char*, ...);
 void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
 
@@ -54,36 +56,10 @@ void            ideinit(void);
 void            ideintr(void);
 void            iderw(struct buf*);
 
-// ioapic.c
-void            ioapicenable(int irq, int cpu);
-extern uchar    ioapicid;
-void            ioapicinit(void);
-
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);
 void            kinit();
-
-// kbd.c
-void            kbdintr(void);
-
-// lapic.c
-int             cpunum(void);
-extern volatile uint*    lapic;
-void            lapiceoi(void);
-void            lapicinit(int);
-void            lapicstartap(uchar, uint);
-void            microdelay(int);
-
-// mp.c
-extern int      ismp;
-int             mpbcpu(void);
-void            mpinit(void);
-void            mpstartthem(void);
-
-// picirq.c
-void            picenable(int);
-void            picinit(void);
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
@@ -91,7 +67,6 @@ void            pipeclose(struct pipe*, int);
 int             piperead(struct pipe*, char*, int);
 int             pipewrite(struct pipe*, char*, int);
 
-//PAGEBREAK: 16
 // proc.c
 struct proc*    copyproc(struct proc*);
 void            exit(void);
@@ -135,21 +110,23 @@ int             argptr(int, char**, int);
 int             argstr(int, char**);
 int             fetchint(struct proc*, uint, int*);
 int             fetchstr(struct proc*, uint, char**);
-void            syscall(void);
+void            do_syscall(void);
 
 // timer.c
-void            timerinit(void);
+void            timer_init(void);
 
 // trap.c
-void            idtinit(void);
 extern uint     ticks;
+extern handler_t  vectors[];
 void            tvinit(void);
+void            register_handler(uint evt, handler_t handler);
 extern struct spinlock tickslock;
 
-// uart.c
-void            uartinit(void);
-void            uartintr(void);
-void            uartputc(int);
+// scif.c
+void            scif_init(void);
+int             scif_putc(int c);
+int             scif_get(void);
+int             putc(int c);
 
 // vm.c
 void            ksegment(void);
@@ -165,6 +142,18 @@ int             loaduvm(pde_t*, char*, struct inode *, uint, uint);
 pde_t*          copyuvm(pde_t*,uint);
 void            switchuvm(struct proc*);
 void            switchkvm();
+void            tlb_register(char *va);
+void            do_tlb_miss();
+void            do_tlb_violation();
+
+// mmu.c
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+// for debug
+void            dump_pde(pde_t *, int also_dump_mem, int);
+void            dump_pgd(pde_t *, int);
+void            dump_mem(char *, int, int);
+void            dump_proc(struct proc *);
+void            dump_context(struct context *);

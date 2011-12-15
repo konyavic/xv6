@@ -1,66 +1,51 @@
 #include "param.h"
 #include "types.h"
 #include "defs.h"
-#include "x86.h"
+#include "sh4.h"
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
 
-#define USERTOP  0xA0000
+#define USERTOP  0x80000000
 
 static pde_t *kpgdir;  // for use in scheduler()
+extern struct cpu *bcpu;
 
 // Set up CPU's kernel segment descriptors.
 // Run once at boot time on each CPU.
 void
 ksegment(void)
 {
-  struct cpu *c;
-
-  // Map virtual addresses to linear addresses using identity map.
-  // Cannot share a CODE descriptor for both kernel and user
-  // because it would have to have DPL_USR, but the CPU forbids
-  // an interrupt from CPL=0 to DPL=3.
-  c = &cpus[cpunum()];
-  c->gdt[SEG_KCODE] = SEG(STA_X|STA_R, 0, 0xffffffff, 0);
-  c->gdt[SEG_KDATA] = SEG(STA_W, 0, 0xffffffff, 0);
-  c->gdt[SEG_UCODE] = SEG(STA_X|STA_R, 0, 0xffffffff, DPL_USER);
-  c->gdt[SEG_UDATA] = SEG(STA_W, 0, 0xffffffff, DPL_USER);
-
-  // Map cpu, and curproc
-  c->gdt[SEG_KCPU] = SEG(STA_W, &c->cpu, 8, 0);
-
-  lgdt(c->gdt, sizeof(c->gdt));
-  loadgs(SEG_KCPU << 3);
-  
-  // Initialize cpu-local storage.
-  cpu = c;
+  // MP is not supported
+  // SH4A has no segment
+  bcpu = &cpus[0];
+  cpu = bcpu;
   proc = 0;
 }
 
 // Return the address of the PTE in page table pgdir
 // that corresponds to linear address va.  If create!=0,
 // create any required page table pages.
-static pte_t *
+static pde_t *
 walkpgdir(pde_t *pgdir, const void *va, int create)
 {
   uint r;
   pde_t *pde;
-  pte_t *pgtab;
+  pde_t *pgtab;
 
   pde = &pgdir[PDX(va)];
-  if(*pde & PTE_P){
-    pgtab = (pte_t*) PTE_ADDR(*pde);
+  if(*pde & PTEL_V){
+    pgtab = (pde_t*) PTE_ADDR(*pde);
   } else if(!create || !(r = (uint) kalloc()))
     return 0;
   else {
-    pgtab = (pte_t*) r;
+    pgtab = (pde_t*) r;
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
     // be further restricted by the permissions in the page table 
     // entries, if necessary.
-    *pde = PADDR(r) | PTE_P | PTE_W | PTE_U;
+    *pde = PADDR(r) | PTEL_DEFAULT;
   }
   return &pgtab[PTX(va)];
 }
@@ -75,12 +60,12 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
   char *last = PGROUNDDOWN(la + size - 1);
 
   while(1){
-    pte_t *pte = walkpgdir(pgdir, a, 1);
+    pde_t *pte = walkpgdir(pgdir, a, 1);
     if(pte == 0)
       return 0;
-    if(*pte & PTE_P)
+    if(*pte & PTEL_V)
       panic("remap");
-    *pte = pa | perm | PTE_P;
+    *pte = pa | perm | PTEL_V;
     if(a == last)
       break;
     a += PGSIZE;
@@ -88,6 +73,7 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
   }
   return 1;
 }
+
 
 // The mappings from logical to linear are one to one (i.e.,
 // segmentation doesn't do anything).
@@ -129,14 +115,14 @@ setupkvm(void)
   // Allocate page directory
   if(!(pgdir = (pde_t *) kalloc()))
     return 0;
+#ifdef DEBUG
+  cprintf("%s: pgdir=0x%x\n", __func__, pgdir);
+#endif
   memset(pgdir, 0, PGSIZE);
-  if(// Map IO space from 640K to 1Mbyte
-     !mappages(pgdir, (void *)USERTOP, 0x60000, USERTOP, PTE_W) ||
-     // Map kernel and free memory pool
-     !mappages(pgdir, (void *)0x100000, PHYSTOP-0x100000, 0x100000, PTE_W) ||
-     // Map devices such as ioapic, lapic, ...
-     !mappages(pgdir, (void *)0xFE000000, 0x2000000, 0xFE000000, PTE_W))
-    return 0;
+  // SH4A do not have to map the kernel space again,
+  // it can access P1 directly
+  //if(!mappages(pgdir, (void *)0x8c800000, PHYSTOP-0x8c800000, 0x0c800000, PTE_W))
+  //  return 0;
   return pgdir;
 }
 
@@ -144,12 +130,13 @@ setupkvm(void)
 void
 vmenable(void)
 {
-  uint cr0;
-
-  switchkvm(); // load kpgdir into cr3
-  cr0 = rcr0();
-  cr0 |= CR0_PG;
-  lcr0(cr0);
+  //uint cr0;
+  switchkvm();
+  enable_mmu();
+   // load kpgdir into cr3
+  //cr0 = rcr0();
+  //cr0 |= CR0_PG;
+  //lcr0(cr0);
 }
 
 // Switch h/w page table register to the kernel-only page table,
@@ -157,27 +144,49 @@ vmenable(void)
 void
 switchkvm()
 {
-  lcr3(PADDR(kpgdir));   // switch to the kernel page table
+#ifdef DEBUG
+  cprintf("%s:\n", __func__);
+#endif
+  // Do nothing because kernel space do not have to be mapped in SH4A
 }
 
 // Switch h/w page table and TSS registers to point to process p.
 void
 switchuvm(struct proc *p)
 {
+#ifdef DEBUG
+  cprintf("%s: start\n", __func__);
+#endif
+  
   pushcli();
-
-  // Setup TSS
-  cpu->gdt[SEG_TSS] = SEG16(STS_T32A, &cpu->ts, sizeof(cpu->ts)-1, 0);
-  cpu->gdt[SEG_TSS].s = 0;
-  cpu->ts.ss0 = SEG_KDATA << 3;
-  cpu->ts.esp0 = (uint)proc->kstack + KSTACKSIZE;
-  ltr(SEG_TSS << 3);
 
   if(p->pgdir == 0)
     panic("switchuvm: no pgdir\n");
 
-  lcr3(PADDR(p->pgdir));  // switch to new address space
+  //disable_mmu();
+  clear_tlb();
+
+  // load TLB for current process
+  // XXX: should be done in TLB miss
+  char *va;
+  pde_t *pte;
+  int i;
+  for (
+      va = 0, i = 0; 
+      ((pte = (pde_t *) walkpgdir(proc->pgdir, va, 0)) != 0) && *pte != 0
+      ; va += PGSIZE, i = (i+1)%64
+      ) {
+    set_urc(i);
+    tlb_register(va);
+  }
+  
+  //enable_mmu();
+  
   popcli();
+
+#ifdef DEBUG
+  cprintf("%s: end\n", __func__);
+#endif
 }
 
 // Return the physical address that a given user address
@@ -187,7 +196,7 @@ switchuvm(struct proc *p)
 char*
 uva2ka(pde_t *pgdir, char *uva)
 {    
-  pte_t *pte = walkpgdir(pgdir, uva, 0);
+  pde_t *pte = walkpgdir(pgdir, uva, 0);
   if(pte == 0) return 0;
   uint pa = PTE_ADDR(*pte);
   return (char *)pa;
@@ -199,10 +208,13 @@ void
 inituvm(pde_t *pgdir, char *init, uint sz)
 {
   char *mem = kalloc();
+#ifdef DEBUG
+  cprintf("%s: mem=0x%x\n", __func__, mem);
+#endif
   if (sz >= PGSIZE)
     panic("inituvm: more than a page");
   memset(mem, 0, PGSIZE);
-  mappages(pgdir, 0, PGSIZE, PADDR(mem), PTE_W|PTE_U);
+  mappages(pgdir, 0, PGSIZE, PADDR(mem), PTEL_DEFAULT);
   memmove(mem, init, sz);
 }
 
@@ -212,7 +224,7 @@ int
 loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 {
   uint i, pa, n;
-  pte_t *pte;
+  pde_t *pte;
 
   if((uint)addr % PGSIZE != 0)
     panic("loaduvm: addr must be page aligned\n");
@@ -247,7 +259,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
-    mappages(pgdir, a, PGSIZE, PADDR(mem), PTE_W|PTE_U);
+    mappages(pgdir, a, PGSIZE, PADDR(mem), PTEL_DEFAULT);
   }
   return newsz > oldsz ? newsz : oldsz;
 }
@@ -262,8 +274,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   char *a = (char *)PGROUNDUP(newsz);
   char *last = PGROUNDDOWN(oldsz - 1);
   for(; a <= last; a += PGSIZE){
-    pte_t *pte = walkpgdir(pgdir, a, 0);
-    if(pte && (*pte & PTE_P) != 0){
+    pde_t *pte = walkpgdir(pgdir, a, 0);
+    if(pte && (*pte & PTEL_V) != 0){
       uint pa = PTE_ADDR(*pte);
       if(pa == 0)
         panic("kfree");
@@ -279,17 +291,28 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 void
 freevm(pde_t *pgdir)
 {
+#ifdef DEBUG
+  cprintf("%s:\n", __func__);
+#endif
   uint i;
-
   if(!pgdir)
     panic("freevm: no pgdir");
-  deallocuvm(pgdir, USERTOP, 0);
+  deallocuvm(pgdir, USERTOP, 0);  // XXX: heavy
   for(i = 0; i < NPDENTRIES; i++){
-    if(pgdir[i] & PTE_P)
+    if(pgdir[i] & PTEL_V) {
+#ifdef DEBUG
+      cprintf("%s: free page addr=0x%x\n", __func__, PTE_ADDR(pgdir[i]));
+#endif
       kfree((void *) PTE_ADDR(pgdir[i]));
+    }
   }
+#ifdef DEBUG
+  cprintf("%s: free pgdir=0x%x\n", __func__, pgdir);
+#endif
   kfree((void *) pgdir);
 }
+
+
 
 // Given a parent process's page table, create a copy
 // of it for a child.
@@ -297,7 +320,7 @@ pde_t*
 copyuvm(pde_t *pgdir, uint sz)
 {
   pde_t *d = setupkvm();
-  pte_t *pte;
+  pde_t *pte;
   uint pa, i;
   char *mem;
 
@@ -305,13 +328,13 @@ copyuvm(pde_t *pgdir, uint sz)
   for(i = 0; i < sz; i += PGSIZE){
     if(!(pte = walkpgdir(pgdir, (void *)i, 0)))
       panic("copyuvm: pte should exist\n");
-    if(!(*pte & PTE_P))
+    if(!(*pte & PTEL_V))
       panic("copyuvm: page not present\n");
     pa = PTE_ADDR(*pte);
     if(!(mem = kalloc()))
       goto bad;
     memmove(mem, (char *)pa, PGSIZE);
-    if(!mappages(d, (void *)i, PGSIZE, PADDR(mem), PTE_W|PTE_U))
+    if(!mappages(d, (void *)i, PGSIZE, PADDR(mem), PTEL_DEFAULT))
       goto bad;
   }
   return d;
@@ -321,3 +344,165 @@ bad:
   return 0;
 }
 
+void tlb_register(char *va) 
+{
+  pde_t *pte = walkpgdir(proc->pgdir, va, 0);
+  uint pa = PTE_ADDR(*pte);
+  uint perm = PTE_PERM(*pte);
+  set_pteh(PTE_ADDR(va));
+  set_ptel(pa|perm);
+#ifdef DEBUG
+  cprintf("%s: va=0x%x PTEH=0x%x PTEL=0x%x\n", __func__, 
+      va, *(uint *)PTEH, *(uint *)PTEL);
+#endif
+  ldtlb();
+}
+
+void do_tlb_miss()
+{
+  // XXX: current irq lock in acquire() forbid TLB miss 
+  // and causes reset
+
+  //char *va = *(char **)TEA;
+  //tlb_register(va);
+  return;
+}
+
+void do_tlb_violation()
+{
+  cprintf("pid %d %s: access violation -- killed\n", proc->pid, proc->name);
+  proc->killed = 1;
+  exit();
+}
+
+char dump_head[] = "        ";
+void dump_pde(pde_t *pde, int also_dump_mem, int level) 
+{
+  char *head = dump_head + sizeof(dump_head) - level - 1;
+  cprintf("%s--- %s start ---\n", head, __func__);
+  int i;
+  int skip = 0;
+  for (i = 0; i < PGSIZE/4; i += 8) {
+    if (i != 0 
+        && pde[i] == pde[i-8]
+        && pde[i+1] == pde[i-7]
+        && pde[i+2] == pde[i-6]
+        && pde[i+3] == pde[i-5]
+        && pde[i+4] == pde[i-4]
+        && pde[i+5] == pde[i-3]
+        && pde[i+6] == pde[i-2]
+        && pde[i+7] == pde[i-1]
+        ) {
+      if (!skip) {
+        cprintf("%s *\n", head);
+        skip = 1;
+      }
+      continue;
+    }
+    skip = 0;
+    cprintf(
+        "%s[0x%x] "
+        "0x%x, "
+        "0x%x, "
+        "0x%x, "
+        "0x%x, "
+        "0x%x, "
+        "0x%x, "
+        "0x%x, "
+        "0x%x\n",
+        head,
+        pde+i,
+        pde[i],
+        pde[i+1],
+        pde[i+2],
+        pde[i+3],
+        pde[i+4],
+        pde[i+5],
+        pde[i+6],
+        pde[i+7]
+        );
+    if (!also_dump_mem)
+      continue;
+
+    int j;
+    for (j = 0; j < 8; ++j) {
+      if (pde[i+j] != 0) {
+        dump_mem((char *)PTE_ADDR(pde[i+j]), PGSIZE, level + 2);
+      }
+    }
+  }
+  cprintf("%s--- %s end ---\n", head, __func__);
+}
+
+void dump_pgd(pde_t *pgd, int level) 
+{
+  char *head = dump_head + sizeof(dump_head) - level - 1;
+  cprintf("%s--- %s start ---\n", head, __func__);
+  int i;
+  for (i = 0; i < PGSIZE/4; i += 8) {
+    if (pgd[i] != 0) {
+      cprintf("%spte=0x%x\n", head, pgd[i]);
+      dump_pde((pde_t *)PTE_ADDR(pgd[i]), 1, level+2);
+    }
+  }
+  cprintf("%s--- %s end ---\n", head, __func__);
+}
+
+void dump_mem(char *addr, int size, int level) 
+{
+  char *head = dump_head + sizeof(dump_head) - level - 1;
+  cprintf("%s--- %s start ---\n", head, __func__);
+  int i;
+  int skip = 0;
+  for (i = 0; i < PGSIZE; i += 16) {
+    if (i != 0 
+        && addr[i] == addr[i-16]
+        && addr[i+1] == addr[i-15]
+        && addr[i+2] == addr[i-14]
+        && addr[i+3] == addr[i-13]
+        && addr[i+4] == addr[i-12]
+        && addr[i+5] == addr[i-11]
+        && addr[i+6] == addr[i-10]
+        && addr[i+7] == addr[i-9]
+        && addr[i+8] == addr[i-8]
+        && addr[i+9] == addr[i-7]
+        && addr[i+10] == addr[i-6]
+        && addr[i+11] == addr[i-5]
+        && addr[i+12] == addr[i-4]
+        && addr[i+13] == addr[i-3]
+        && addr[i+14] == addr[i-2]
+        && addr[i+15] == addr[i-1]
+        ) {
+      if (!skip) {
+        cprintf("%s *\n", head);
+        skip = 1;
+      }
+      continue;
+    }
+    skip = 0;
+    cprintf(
+        "%s[0x%x] "
+        "%x %x %x %x %x %x %x %x "
+        "%x %x %x %x %x %x %x %x\n",
+        head,
+        addr+i,
+        addr[i],
+        addr[i+1],
+        addr[i+2],
+        addr[i+3],
+        addr[i+4],
+        addr[i+5],
+        addr[i+6],
+        addr[i+7],
+        addr[i+8],
+        addr[i+9],
+        addr[i+10],
+        addr[i+11],
+        addr[i+12],
+        addr[i+13],
+        addr[i+14],
+        addr[i+15]
+        );
+  }
+  cprintf("%s--- %s end ---\n", head, __func__);
+}

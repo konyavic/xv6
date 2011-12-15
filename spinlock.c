@@ -3,10 +3,12 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-#include "x86.h"
+#include "sh4.h"
 #include "mmu.h"
 #include "proc.h"
 #include "spinlock.h"
+
+
 
 void
 initlock(struct spinlock *lk, char *name)
@@ -30,9 +32,9 @@ acquire(struct spinlock *lk)
   // The xchg is atomic.
   // It also serializes, so that reads after acquire are not
   // reordered before it. 
-  while(xchg(&lk->locked, 1) != 0)
+  while(lk->locked != 0)
     ;
-
+  lk->locked = 1;
   // Record info about lock acquisition for debugging.
   lk->cpu = cpu;
   getcallerpcs(&lk, lk->pcs);
@@ -57,20 +59,24 @@ release(struct spinlock *lk)
   // after a store. So lock->locked = 0 would work here.
   // The xchg being asm volatile ensures gcc emits it after
   // the above assignments (and after the critical section).
-  xchg(&lk->locked, 0);
+  lk->locked = 0;
 
   popcli();
+  return;
 }
 
 // Record the current call stack in pcs[] by following the %ebp chain.
 void
 getcallerpcs(void *v, uint pcs[])
 {
+  // XXX: Due to a different frame in SH4A,
+  // it is left for further works.
   uint *ebp;
   int i;
-  
+ 
   ebp = (uint*)v - 2;
   for(i = 0; i < 10; i++){
+    break;
     if(ebp == 0 || ebp < (uint *) 0x100000 || ebp == (uint*)0xffffffff)
       break;
     pcs[i] = ebp[1];     // saved %eip
@@ -95,22 +101,22 @@ holding(struct spinlock *lock)
 void
 pushcli(void)
 {
-  int eflags;
+  int sr;
   
-  eflags = readeflags();
+  sr = read_sr();
   cli();
   if(cpu->ncli++ == 0)
-    cpu->intena = eflags & FL_IF;
+    cpu->intena = sr & SR_BL_MASK;
 }
 
 void
 popcli(void)
 {
-  if(readeflags()&FL_IF)
+  if(!(read_sr() & SR_BL_MASK))
     panic("popcli - interruptible");
   if(--cpu->ncli < 0)
     panic("popcli");
-  if(cpu->ncli == 0 && cpu->intena)
+  if(cpu->ncli == 0 && !cpu->intena)
     sti();
 }
 

@@ -1,10 +1,15 @@
 #include "types.h"
-#include "x86.h"
+#include "sh4.h"
 
 void*
 memset(void *dst, int c, uint n)
 {
-  stosb(dst, c, n);
+  char *s1;
+  s1=dst;
+  while(n-- > 0){
+        *s1= c;
+         s1++;
+  }  
   return dst;
 }
 

@@ -6,6 +6,8 @@
 #include <assert.h>
 #include "types.h"
 #include "fs.h"
+
+#define stat xv6_stat
 #include "stat.h"
 
 int nblocks = 995;

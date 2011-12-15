@@ -3,7 +3,7 @@
 #include "param.h"
 #include "mmu.h"
 #include "proc.h"
-#include "x86.h"
+#include "sh4.h"
 #include "syscall.h"
 
 // User code makes a system call with INT T_SYSCALL.
@@ -41,11 +41,36 @@ fetchstr(struct proc *p, uint addr, char **pp)
 }
 
 // Fetch the nth 32-bit system call argument.
+// SH4A:
+// According to GCC calling convention, the first four 
+// arguments are stored to register r4 to r7, respectively.
 int
 argint(int n, int *ip)
 {
-  int x = fetchint(proc, proc->tf->esp + 4 + 4*n, ip);
-  return x;
+  int x;
+  switch (n) {
+    case 0:
+      asm volatile ("stc r4_bank, %0" : "=r"(x));
+      *ip = x;
+      return 0;
+    case 1:
+      asm volatile ("stc r5_bank, %0" : "=r"(x));
+      *ip = x;
+      return 0;
+    case 2:
+      asm volatile ("stc r6_bank, %0" : "=r"(x));
+      *ip = x;
+      return 0;
+    case 3:
+      asm volatile ("stc r7_bank, %0" : "=r"(x));
+      *ip = x;
+      return 0;
+    default:
+      // Fetch from stack
+      // XXX: NOT TESTSED
+      x = fetchint(proc, proc->tf->sgr + 4*n, ip);
+      return x;
+  }
 }
 
 // Fetch the nth word-sized system call argument as a pointer
@@ -124,16 +149,20 @@ static int (*syscalls[])(void) = {
 };
 
 void
-syscall(void)
+do_syscall(void)
 {
-  int num;
-  
-  num = proc->tf->eax;
+  int num = *((int *)TRA) >> 2;
+  int ret;
+#ifdef DEBUGxxx
+  cprintf("%s: tra=%d, spc=0x%x\n", 
+      __func__, num, proc->tf->spc);
+#endif
   if(num >= 0 && num < NELEM(syscalls) && syscalls[num])
-    proc->tf->eax = syscalls[num]();
+    ret = syscalls[num]();
   else {
     cprintf("%d %s: unknown sys call %d\n",
             proc->pid, proc->name, num);
-    proc->tf->eax = -1;
+    ret = -1;
   }
+  asm volatile("ldc %0, r0_bank" :: "r"(ret));
 }

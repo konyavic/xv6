@@ -142,7 +142,6 @@ iinit(void)
 
 static struct inode* iget(uint dev, uint inum);
 
-//PAGEBREAK!
 // Allocate a new inode with the given type on device dev.
 struct inode*
 ialloc(uint dev, short type)
@@ -244,8 +243,9 @@ ilock(struct inode *ip)
     panic("ilock");
 
   acquire(&icache.lock);
-  while(ip->flags & I_BUSY)
+  while(ip->flags & I_BUSY) {
     sleep(ip, &icache.lock);
+  }
   ip->flags |= I_BUSY;
   release(&icache.lock);
 
@@ -308,7 +308,6 @@ iunlockput(struct inode *ip)
   iput(ip);
 }
 
-//PAGEBREAK!
 // Inode contents
 //
 // The contents (data) associated with each inode is stored
@@ -392,7 +391,6 @@ stati(struct inode *ip, struct stat *st)
   st->size = ip->size;
 }
 
-//PAGEBREAK!
 // Read data from inode.
 int
 readi(struct inode *ip, char *dst, uint off, uint n)
@@ -420,7 +418,6 @@ readi(struct inode *ip, char *dst, uint off, uint n)
   return n;
 }
 
-// PAGEBREAK!
 // Write data to inode.
 int
 writei(struct inode *ip, char *src, uint off, uint n)
@@ -454,7 +451,6 @@ writei(struct inode *ip, char *src, uint off, uint n)
   return n;
 }
 
-//PAGEBREAK!
 // Directories
 
 int
@@ -527,7 +523,6 @@ dirlink(struct inode *dp, char *name, uint inum)
   return 0;
 }
 
-//PAGEBREAK!
 // Paths
 
 // Copy the next path element from path into name.

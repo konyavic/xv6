@@ -1,30 +1,30 @@
 # Initial process execs /init.
 
 #include "syscall.h"
-#include "traps.h"
 
 # exec(init, argv)
-.globl start
+.global start
 start:
-  pushl $argv
-  pushl $init
-  pushl $0  // where caller pc would be
-  movl $SYS_exec, %eax
-  int $T_SYSCALL
+	mov.l 1f, r4
+	mov.l 2f, r5
+	TRAPA #SYS_exec
+  nop
 
-# for(;;) exit();
-exit:
-  movl $SYS_exit, %eax
-  int $T_SYSCALL
-  jmp exit
+# should not reach here
+3:
+  bra 3b
+  nop
 
 # char init[] = "/init\0";
+1: 
+  .long init
 init:
   .string "/init\0"
 
+.align 4
 # char *argv[] = { init, 0 };
-.p2align 2
+2: 
+  .long argv
 argv:
   .long init
   .long 0
-

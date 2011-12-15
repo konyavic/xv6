@@ -5,13 +5,14 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-#include "traps.h"
 #include "spinlock.h"
 #include "fs.h"
 #include "file.h"
 #include "mmu.h"
 #include "proc.h"
-#include "x86.h"
+#include "sh4.h"
+
+#include <stdarg.h>
 
 static void consputc(int);
 
@@ -23,7 +24,7 @@ static struct {
 } cons;
 
 static void
-printint(int xx, int base, int sgn)
+printint(int xx, uint base, int sgn)
 {
   static char digits[] = "0123456789abcdef";
   char buf[16];
@@ -42,18 +43,20 @@ printint(int xx, int base, int sgn)
   if(neg)
     buf[i++] = '-';
 
-  while(--i >= 0)
+  while(--i >= 0) {
     consputc(buf[i]);
+  }
 }
 
-//PAGEBREAK: 50
 // Print to the console. only understands %d, %x, %p, %s.
 void
-cprintf(char *fmt, ...)
+cprintf(const char *fmt, ...)
 {
   int i, c, state, locking;
   uint *argp;
   char *s;
+
+  va_list ap;
 
   locking = cons.locking;
   if(locking)
@@ -61,6 +64,7 @@ cprintf(char *fmt, ...)
 
   argp = (uint*)(void*)(&fmt + 1);
   state = 0;
+  va_start(ap, fmt);
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
       consputc(c);
@@ -71,14 +75,14 @@ cprintf(char *fmt, ...)
       break;
     switch(c){
     case 'd':
-      printint(*argp++, 10, 1);
+      printint(va_arg(ap, int), 10, 1);
       break;
     case 'x':
     case 'p':
-      printint(*argp++, 16, 0);
+      printint(va_arg(ap, int), 16, 0);
       break;
     case 's':
-      if((s = (char*)*argp++) == 0)
+      if((s = (char*)va_arg(ap, char *)) == 0)
         s = "(null)";
       for(; *s; s++)
         consputc(*s);
@@ -93,6 +97,7 @@ cprintf(char *fmt, ...)
       break;
     }
   }
+  va_end(ap);
 
   if(locking)
     release(&cons.lock);
@@ -117,41 +122,8 @@ panic(char *s)
     ;
 }
 
-//PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
-static ushort *crt = (ushort*)0xb8000;  // CGA memory
-
-static void
-cgaputc(int c)
-{
-  int pos;
-  
-  // Cursor position: col + 80*row.
-  outb(CRTPORT, 14);
-  pos = inb(CRTPORT+1) << 8;
-  outb(CRTPORT, 15);
-  pos |= inb(CRTPORT+1);
-
-  if(c == '\n')
-    pos += 80 - pos%80;
-  else if(c == BACKSPACE){
-    if(pos > 0) --pos;
-  } else
-    crt[pos++] = (c&0xff) | 0x0700;  // black on white
-  
-  if((pos/80) >= 24){  // Scroll up.
-    memmove(crt, crt+80, sizeof(crt[0])*23*80);
-    pos -= 80;
-    memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
-  }
-  
-  outb(CRTPORT, 14);
-  outb(CRTPORT+1, pos>>8);
-  outb(CRTPORT, 15);
-  outb(CRTPORT+1, pos);
-  crt[pos] = ' ' | 0x0700;
-}
 
 void
 consputc(int c)
@@ -163,10 +135,10 @@ consputc(int c)
   }
 
   if(c == BACKSPACE){
-    uartputc('\b'); uartputc(' '); uartputc('\b');
+    putc('\b'); putc(' '); putc('\b');
   } else
-    uartputc(c);
-  cgaputc(c);
+    putc(c);
+  //cgaputc(c);
 }
 
 #define INPUT_BUF 128
@@ -282,8 +254,5 @@ consoleinit(void)
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
-
-  picenable(IRQ_KBD);
-  ioapicenable(IRQ_KBD, 0);
 }
 

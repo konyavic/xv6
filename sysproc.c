@@ -1,5 +1,5 @@
 #include "types.h"
-#include "x86.h"
+#include "sh4.h"
 #include "defs.h"
 #include "param.h"
 #include "mmu.h"
@@ -25,7 +25,7 @@ sys_wait(void)
 }
 
 int
-sys_kill(void)
+sys_kill()
 {
   int pid;
 
@@ -53,6 +53,8 @@ sys_sbrk(void)
     return -1;
   return addr;
 }
+
+#include "defs.h"
 
 int
 sys_sleep(void)

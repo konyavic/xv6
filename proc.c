@@ -2,7 +2,7 @@
 #include "defs.h"
 #include "param.h"
 #include "mmu.h"
-#include "x86.h"
+#include "sh4.h"
 #include "proc.h"
 #include "spinlock.h"
 
@@ -14,6 +14,7 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+extern struct trapframe *ktf;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -25,7 +26,6 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
 }
 
-//PAGEBREAK: 36
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
@@ -54,7 +54,8 @@ procdump(void)
       state = "???";
     cprintf("%d %s %s", p->pid, state, p->name);
     if(p->state == SLEEPING){
-      getcallerpcs((uint*)p->context->ebp+2, pc);
+      // XXX
+      getcallerpcs((uint*)p->context->r14+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
@@ -63,7 +64,6 @@ procdump(void)
 }
 
 
-//PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and return it.
 // Otherwise return 0.
@@ -90,25 +90,29 @@ found:
     p->state = UNUSED;
     return 0;
   }
+#ifdef DEBUG
+  cprintf("%s: p->kstack=0x%x\n", __func__, p->kstack);
+#endif
   sp = p->kstack + KSTACKSIZE;
   
   // Leave room for trap frame.
   sp -= sizeof *p->tf;
   p->tf = (struct trapframe*)sp;
+  p->tf->ssr = 0x00000000;
   
   // Set up new context to start executing at forkret,
   // which returns to trapret (see below).
-  sp -= 4;
-  *(uint*)sp = (uint)trapret;
 
   sp -= sizeof *p->context;
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
-  p->context->eip = (uint)forkret;
+  p->context->sr = 0x70000000;
+  p->context->pr = (uint)forkret;
+  p->context->r15 = (uint) p->tf;
+  p->context->r14 = (uint) p->kstack + KSTACKSIZE;
   return p;
 }
 
-//PAGEBREAK: 32
 // Set up first user process.
 void
 userinit(void)
@@ -123,13 +127,9 @@ userinit(void)
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
   memset(p->tf, 0, sizeof(*p->tf));
-  p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
-  p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
-  p->tf->es = p->tf->ds;
-  p->tf->ss = p->tf->ds;
-  p->tf->eflags = FL_IF;
-  p->tf->esp = PGSIZE;
-  p->tf->eip = 0;  // beginning of initcode.S
+
+  p->tf->sgr = PGSIZE;
+  p->tf->spc = 0;  // beginning of initcode.S
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -161,6 +161,9 @@ growproc(int n)
 int
 fork(void)
 {
+#ifdef DEBUG
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
+#endif
   int i, pid;
   struct proc *np;
 
@@ -178,9 +181,12 @@ fork(void)
   np->sz = proc->sz;
   np->parent = proc;
   *np->tf = *proc->tf;
+#ifdef DEBUG
+  cprintf("%s: proc->kstack=0x%x\n", __func__, proc->kstack);
+  cprintf("%s: np->kstack=0x%x\n", __func__, np->kstack);
+#endif
 
   // Clear %eax so that fork returns 0 in the child.
-  np->tf->eax = 0;
 
   for(i = 0; i < NOFILE; i++)
     if(proc->ofile[i])
@@ -241,6 +247,9 @@ exit(void)
 int
 wait(void)
 {
+#ifdef DEBUG
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
+#endif
   struct proc *p;
   int havekids, pid;
 
@@ -279,7 +288,6 @@ wait(void)
   }
 }
 
-//PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -295,12 +303,18 @@ scheduler(void)
   for(;;){
     // Enable interrupts on this processor.
     sti();
+#ifdef DEBUGxxx
+    cprintf("%s: sr=0x%x\n", __func__, read_sr());
+#endif
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+#ifdef DEBUG
+      cprintf("%s: found pid=%d\n", __func__, p->pid);
+#endif
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -308,7 +322,16 @@ scheduler(void)
       proc = p;
       switchuvm(p);
       p->state = RUNNING;
+#ifdef DEBUG
+      cprintf("%s: before swtch\n", __func__);
+      cprintf("%s: proc->context=0x%x \n", __func__, proc->context);
+      cprintf("%s: proc->kstack=0x%x \n", __func__, proc->kstack);
+      dump_context(proc->context);
+#endif
       swtch(&cpu->scheduler, proc->context);
+#ifdef DEBUG
+      cprintf("%s: after swtch\n", __func__);
+#endif
       switchkvm();
 
       // Process is done running for now.
@@ -316,7 +339,6 @@ scheduler(void)
       proc = 0;
     }
     release(&ptable.lock);
-
   }
 }
 
@@ -325,6 +347,9 @@ scheduler(void)
 void
 sched(void)
 {
+#ifdef DEBUG
+  cprintf("%s:\n", __func__);
+#endif
   int intena;
 
   if(!holding(&ptable.lock))
@@ -333,11 +358,18 @@ sched(void)
     panic("sched locks");
   if(proc->state == RUNNING)
     panic("sched running");
-  if(readeflags()&FL_IF)
+  if(!(read_sr() & SR_BL_MASK))
     panic("sched interruptible");
   intena = cpu->intena;
+#ifdef DEBUG
+  cprintf("%s: before swtch\n", __func__);
+#endif
   swtch(&proc->context, cpu->scheduler);
+#ifdef DEBUG
+  cprintf("%s: after swtch\n", __func__);
+#endif
   cpu->intena = intena;
+  return;
 }
 
 // Give up the CPU for one scheduling round.
@@ -355,10 +387,25 @@ yield(void)
 void
 forkret(void)
 {
+#ifdef DEBUG
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
+  cprintf("%s: proc->tf->spc=0x%x\n", __func__, proc->tf->spc);
+  cprintf("%s: proc->tf->sgr=0x%x\n", __func__, proc->tf->sgr);
+  cprintf("%s: proc->tf->ssr=0x%x\n", __func__, proc->tf->ssr);
+#endif
   // Still holding ptable.lock from scheduler.
   release(&ptable.lock);
-  
+
   // Return to "caller", actually trapret (see allocproc).
+  asm volatile(
+      "add #8, r15\n"     // fix for the clobberred stack
+      "ldc %0, r0_bank\n"
+      "mov %1, r1\n"
+      "jsr @r1\n"
+      "nop\n"
+      :
+      : "r"(0), "r"(trapret)
+      );
 }
 
 // Atomically release lock and sleep on chan.
@@ -398,17 +445,20 @@ sleep(void *chan, struct spinlock *lk)
   }
 }
 
-//PAGEBREAK!
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
-static void
+void
 wakeup1(void *chan)
 {
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan) {
+#ifdef DEBUG
+      cprintf("%s: wakeup pid=%d\n", __func__, p->pid);
+#endif
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -443,3 +493,72 @@ kill(int pid)
   return -1;
 }
 
+
+void dump_proc(struct proc* p) 
+{
+  cprintf("--- %s start ---\n", __func__);
+  cprintf(
+      "name=%s, "
+      "sz=%d, "
+      "pgdir=0x%x, "
+      "kstack=0x%x, "
+      "state=%d, "
+      "pid=%d, "
+      "\n",
+      p->name,
+      p->sz,
+      p->pgdir,
+      p->kstack,
+      p->state,
+      p->pid
+      );
+  dump_pde(p->pgdir, 0, 2);
+  dump_pgd(p->pgdir, 2);
+  cprintf("--- %s end ---\n", __func__);
+}
+
+void dump_context(struct context *cx)
+{
+  cprintf("--- %s start ---\n", __func__);
+  cprintf("r0: 0x%x r1: 0x%x r2: 0x%x r3: 0x%x\n",
+      cx->r0,
+      cx->r1,
+      cx->r2,
+      cx->r3);
+  cprintf("r4: 0x%x r5: 0x%x r6: 0x%x r7: 0x%x\n",
+      cx->r4,
+      cx->r5,
+      cx->r6,
+      cx->r7);
+  cprintf("r8: 0x%x r9: 0x%x r10: 0x%x r11: 0x%x\n",
+      cx->r8,
+      cx->r9,
+      cx->r10,
+      cx->r11);
+  cprintf("r12: 0x%x r13: 0x%x r14: 0x%x r15: 0x%x\n",
+      cx->r12,
+      cx->r13,
+      cx->r14,
+      cx->r15);
+  cprintf("ssr: 0x%x spc: 0x%x\n",
+      cx->ssr,
+      cx->spc);
+  cprintf("gbr: 0x%x mach: 0x%x macl: 0x%x pr: 0x%x\n",
+      cx->gbr,
+      cx->mach,
+      cx->macl,
+      cx->pr);
+  cprintf("r0: 0x%x r1: 0x%x r2: 0x%x r3: 0x%x\n",
+      cx->r0_bank,
+      cx->r1_bank,
+      cx->r2_bank,
+      cx->r3_bank);
+  cprintf("r4: 0x%x r5: 0x%x r6: 0x%x r7: 0x%x\n",
+      cx->r4_bank,
+      cx->r5_bank,
+      cx->r6_bank,
+      cx->r7_bank);
+  cprintf("--- %s end ---\n", __func__);
+}
+
+char debug_str[] = "debug: %x\n";
