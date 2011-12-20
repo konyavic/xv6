@@ -43,6 +43,7 @@ binit(void)
 
   initlock(&bcache.lock, "bcache");
 
+//PAGEBREAK!
   // Create linked list of buffers
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
@@ -97,6 +98,7 @@ struct buf*
 bread(uint dev, uint sector)
 {
   struct buf *b;
+
   b = bget(dev, sector);
   if(!(b->flags & B_VALID))
     iderw(b);

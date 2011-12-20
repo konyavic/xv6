@@ -1272,15 +1272,12 @@ sbrktest(void)
   // can one allocate the full 640K?
   // XXX: current implementation only allows up to 256K
   a = sbrk(0);
-  //uint amt = (640 * 1024) - (uint) a;
   uint amt = (256 * 1024) - (uint) a;
   char *p = sbrk(amt);
   if(p != a){
-    //printf(stdout, "sbrk test failed 640K test, p %x a %x\n", p, a);
     printf(stdout, "sbrk test failed 256K test, p %x a %x\n", p, a);
     exit();
   }
-  //char *lastaddr = (char *)(640 * 1024 - 1);
   char *lastaddr = (char *)(256 * 1024 - 1);
   *lastaddr = 99;
 
@@ -1329,7 +1326,6 @@ sbrktest(void)
 #endif
 
   // can we read the kernel's memory?
-  //for(a = (char*)(640*1024); a < (char *)2000000; a += 50000){
   do {
     a = (char *)0x80000000;
     int ppid = getpid();
@@ -1345,7 +1341,6 @@ sbrktest(void)
     }
     wait();
   } while (0);
-  //}
 
   // if we run the system out of memory, does it clean up the last
   // failed allocation?
@@ -1356,11 +1351,9 @@ sbrktest(void)
     printf(1, "pipe() failed\n");
     exit();
   }
-
   for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
     if((pids[i] = fork()) == 0) {
       // allocate the full 640K
-      //sbrk((640 * 1024) - (uint)sbrk(0));
       sbrk((256 * 1024) - (uint)sbrk(0));
       write(fds[1], "x", 1);
       // sit around until killed
@@ -1370,7 +1363,6 @@ sbrktest(void)
     if(pids[i] != -1)
       read(fds[0], &scratch, 1);
   }
-
   // if those failed allocations freed up the pages they did allocate,
   // we'll be able to allocate here
   c = sbrk(4096);
@@ -1380,7 +1372,6 @@ sbrktest(void)
     kill(pids[i]);
     wait();
   }
-
   if(c == (char*)0xffffffff) {
     printf(stdout, "failed sbrk leaked memory\n");
     exit();

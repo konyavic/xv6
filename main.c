@@ -80,3 +80,34 @@ mpmain(void)
   cpu->booted = 1;
   scheduler();        // start running processes
 }
+
+#if 0
+static void
+bootothers(void)
+{
+  extern uchar _binary_bootother_start[], _binary_bootother_size[];
+  uchar *code;
+  struct cpu *c;
+  char *stack;
+
+  // Write bootstrap code to unused memory at 0x7000.  The linker has
+  // placed the start of bootother.S there.
+  code = (uchar *) 0x7000;
+  memmove(code, _binary_bootother_start, (uint)_binary_bootother_size);
+
+  for(c = cpus; c < cpus+ncpu; c++){
+    if(c == cpus+cpunum())  // We've started already.
+      continue;
+
+    // Fill in %esp, %eip and start code on cpu.
+    stack = kalloc();
+    *(void**)(code-4) = stack + KSTACKSIZE;
+    *(void**)(code-8) = mpmain;
+    lapicstartap(c->id, (uint)code);
+
+    // Wait for cpu to finish mpmain()
+    while(c->booted == 0)
+      ;
+  }
+}
+#endif

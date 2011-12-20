@@ -17,7 +17,7 @@ void
 ksegment(void)
 {
   // MP is not supported
-  // SH4A has no segment
+  // SH4 has no segment
   bcpu = &cpus[0];
   cpu = bcpu;
   proc = 0;
@@ -130,13 +130,8 @@ setupkvm(void)
 void
 vmenable(void)
 {
-  //uint cr0;
   switchkvm();
   enable_mmu();
-   // load kpgdir into cr3
-  //cr0 = rcr0();
-  //cr0 |= CR0_PG;
-  //lcr0(cr0);
 }
 
 // Switch h/w page table register to the kernel-only page table,
@@ -295,6 +290,7 @@ freevm(pde_t *pgdir)
   cprintf("%s:\n", __func__);
 #endif
   uint i;
+
   if(!pgdir)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, USERTOP, 0);  // XXX: heavy
@@ -311,8 +307,6 @@ freevm(pde_t *pgdir)
 #endif
   kfree((void *) pgdir);
 }
-
-
 
 // Given a parent process's page table, create a copy
 // of it for a child.

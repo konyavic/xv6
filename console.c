@@ -24,7 +24,7 @@ static struct {
 } cons;
 
 static void
-printint(int xx, uint base, int sgn)
+printint(int xx, int base, int sgn)
 {
   static char digits[] = "0123456789abcdef";
   char buf[16];
@@ -43,27 +43,25 @@ printint(int xx, uint base, int sgn)
   if(neg)
     buf[i++] = '-';
 
-  while(--i >= 0) {
+  while(--i >= 0)
     consputc(buf[i]);
-  }
 }
 
+//PAGEBREAK: 50
 // Print to the console. only understands %d, %x, %p, %s.
 void
-cprintf(const char *fmt, ...)
+cprintf(char *fmt, ...)
 {
   int i, c, state, locking;
-  uint *argp;
   char *s;
-
-  va_list ap;
 
   locking = cons.locking;
   if(locking)
     acquire(&cons.lock);
 
-  argp = (uint*)(void*)(&fmt + 1);
   state = 0;
+
+  va_list ap;
   va_start(ap, fmt);
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
@@ -122,6 +120,7 @@ panic(char *s)
     ;
 }
 
+//PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
 
@@ -254,5 +253,6 @@ consoleinit(void)
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
+
 }
 

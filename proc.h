@@ -6,7 +6,7 @@ struct cpu {
   volatile uint booted;        // Has the CPU started?
   int ncli;                    // Depth of pushcli nesting.
   int intena;                  // Were interrupts enabled before pushcli?
-
+  
   // Cpu-local storage variables; see below
   struct cpu *cpu;
   struct proc *proc;
@@ -27,6 +27,7 @@ char *kstack;
 struct cpu *cpu;       // This cpu.
 struct proc *proc;     // Current proc on this cpu.
 
+//PAGEBREAK: 17
 // Saved registers for kernel context switches.
 // Don't need to save all the segment registers (%cs, etc),
 // because they are constant across kernel contexts.
@@ -110,7 +111,7 @@ struct trapframe {
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
-struct proc{
+struct proc {
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Linear address of proc's pgdir
   char *kstack;                // Bottom of kernel stack for this process

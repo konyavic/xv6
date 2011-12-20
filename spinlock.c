@@ -8,8 +8,6 @@
 #include "proc.h"
 #include "spinlock.h"
 
-
-
 void
 initlock(struct spinlock *lk, char *name)
 {
@@ -62,14 +60,13 @@ release(struct spinlock *lk)
   lk->locked = 0;
 
   popcli();
-  return;
 }
 
 // Record the current call stack in pcs[] by following the %ebp chain.
 void
 getcallerpcs(void *v, uint pcs[])
 {
-  // XXX: Due to a different frame in SH4A,
+  // XXX: Due to a different frame in SH4,
   // it is left for further works.
   uint *ebp;
   int i;

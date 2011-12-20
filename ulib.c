@@ -2,7 +2,6 @@
 #include "stat.h"
 #include "fcntl.h"
 #include "user.h"
-//#include "sh4.h"
 
 char*
 strcpy(char *s, char *t)
