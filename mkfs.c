@@ -4,6 +4,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
+
+#define stat xv6_stat  // avoid clash with host struct stat
 #include "types.h"
 #include "fs.h"
 
@@ -35,7 +37,7 @@ ushort
 xshort(ushort x)
 {
   ushort y;
-  uchar *a = (uchar*) &y;
+  uchar *a = (uchar*)&y;
   a[0] = x;
   a[1] = x >> 8;
   return y;
@@ -45,7 +47,7 @@ uint
 xint(uint x)
 {
   uint y;
-  uchar *a = (uchar*) &y;
+  uchar *a = (uchar*)&y;
   a[0] = x;
   a[1] = x >> 8;
   a[2] = x >> 16;
@@ -92,7 +94,9 @@ main(int argc, char *argv[])
   for(i = 0; i < nblocks + usedblocks; i++)
     wsect(i, zeroes);
 
-  wsect(1, &sb);
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &sb, sizeof(sb));
+  wsect(1, buf);
 
   rootino = ialloc(T_DIR);
   assert(rootino == ROOTINO);
@@ -175,7 +179,7 @@ winode(uint inum, struct dinode *ip)
 
   bn = i2b(inum);
   rsect(bn, buf);
-  dip = ((struct dinode*) buf) + (inum % IPB);
+  dip = ((struct dinode*)buf) + (inum % IPB);
   *dip = *ip;
   wsect(bn, buf);
 }
@@ -189,7 +193,7 @@ rinode(uint inum, struct dinode *ip)
 
   bn = i2b(inum);
   rsect(bn, buf);
-  dip = ((struct dinode*) buf) + (inum % IPB);
+  dip = ((struct dinode*)buf) + (inum % IPB);
   *ip = *dip;
 }
 
@@ -227,9 +231,9 @@ balloc(int used)
   int i;
 
   printf("balloc: first %d blocks have been allocated\n", used);
-  assert(used < 512);
+  assert(used < 512*8);
   bzero(buf, 512);
-  for(i = 0; i < used; i++) {
+  for(i = 0; i < used; i++){
     buf[i/8] = buf[i/8] | (0x1 << (i%8));
   }
   printf("balloc: write bitmap block at sector %zu\n", ninodes/IPB + 3);
@@ -241,7 +245,7 @@ balloc(int used)
 void
 iappend(uint inum, void *xp, int n)
 {
-  char *p = (char*) xp;
+  char *p = (char*)xp;
   uint fbn, off, n1;
   struct dinode din;
   char buf[512];
@@ -254,24 +258,24 @@ iappend(uint inum, void *xp, int n)
   while(n > 0){
     fbn = off / 512;
     assert(fbn < MAXFILE);
-    if(fbn < NDIRECT) {
-      if(xint(din.addrs[fbn]) == 0) {
+    if(fbn < NDIRECT){
+      if(xint(din.addrs[fbn]) == 0){
         din.addrs[fbn] = xint(freeblock++);
         usedblocks++;
       }
       x = xint(din.addrs[fbn]);
     } else {
-      if(xint(din.addrs[NDIRECT]) == 0) {
+      if(xint(din.addrs[NDIRECT]) == 0){
         // printf("allocate indirect block\n");
         din.addrs[NDIRECT] = xint(freeblock++);
         usedblocks++;
       }
       // printf("read indirect block\n");
-      rsect(xint(din.addrs[NDIRECT]), (char*) indirect);
-      if(indirect[fbn - NDIRECT] == 0) {
+      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+      if(indirect[fbn - NDIRECT] == 0){
         indirect[fbn - NDIRECT] = xint(freeblock++);
         usedblocks++;
-        wsect(xint(din.addrs[NDIRECT]), (char*) indirect);
+        wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       }
       x = xint(indirect[fbn-NDIRECT]);
     }

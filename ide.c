@@ -120,7 +120,7 @@ ideintr(void)
   acquire(&idelock);
   if((b = idequeue) == 0){
     release(&idelock);
-    cprintf("Spurious IDE interrupt.\n");
+    // cprintf("spurious IDE interrupt\n");
     return;
   }
   idequeue = b->qnext;
@@ -157,7 +157,7 @@ iderw(struct buf *b)
     panic("iderw: nothing to do");
 #if 0
   if(b->dev != 0 && !havedisk1)
-    panic("idrw: ide disk 1 not present");
+    panic("iderw: ide disk 1 not present");
 #endif
 
   acquire(&idelock);
@@ -181,7 +181,7 @@ iderw(struct buf *b)
 
   // Wait for request to finish.
   // Assuming will not sleep too long: ignore proc->killed.
-  while((b->flags & (B_VALID|B_DIRTY)) != B_VALID) {
+  while((b->flags & (B_VALID|B_DIRTY)) != B_VALID){
     sleep(b, &idelock);
   }
 

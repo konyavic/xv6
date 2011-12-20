@@ -11,3 +11,5 @@
 
 #define TINTLVL        0xd
 #define TIMER_RATE	(12500000UL)  /* use PCK/4 edge.  12.5Mhz 1tick = 0.08us */
+
+#define MAXARG      32
