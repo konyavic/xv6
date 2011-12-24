@@ -8,8 +8,9 @@
 extern struct cpu *cpu;       // This cpu.
 extern struct proc *proc;     // Current proc on this cpu.
 
+//static void bootothers(void);
 static void mpmain(void);
-void jkstack(void)  __attribute__((noreturn));
+void jmpkstack(void)  __attribute__((noreturn));
 void mainc(void);
 
 unsigned char xv6_stack[STACK_SIZE];
@@ -24,35 +25,35 @@ main(void)
   tvinit();        // trap vectors
   scif_init();     // serial port
   ksegment();      // set up segments
-  consoleinit();   // I/O devices & their interrupts
   kinit();         // initialize memory allocator
-  jkstack();       // call mainc() on a properly-allocated stack 
+  jmpkstack();       // call mainc() on a properly-allocated stack 
 }
 
 void
-jkstack(void)
+jmpkstack(void)
 {
-  char *kstack = kalloc();
-  if(!kstack)
-    panic("jkstack\n");
-  char *top = kstack + PGSIZE;
+  char *kstack, *top;
+  
+  kstack = kalloc();
+  if(kstack == 0)
+    panic("jmpkstack kalloc");
+  top = kstack + PGSIZE;
 #ifdef DEBUG
   cprintf("%s: kstack=0x%x\n", __func__, kstack);
   cprintf("%s: top=0x%x\n", __func__, top);
 #endif
-  asm volatile(
-      "mov %0, r15\n"
-      :
-      : "r"(top)
-      );
+  asm volatile("mov %0, r15\n" : : "r"(top));
   mainc(); 
-  panic("jkstack");
+  panic("jmpkstack");
 }
 
+// Set up hardware and software.
+// Runs only on the boostrap processor.
 void
 mainc(void)
 {
   cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
+  consoleinit();   // I/O devices & their interrupts
   kvmalloc();      // initialize the kernel page table
   pinit();         // process table
   binit();         // buffer cache
@@ -78,10 +79,11 @@ mpmain(void)
   vmenable();         // turn on paging
   cprintf("cpu%d: starting\n", cpu->id);
   cpu->booted = 1;
-  scheduler();        // start running processes
-}
 
+  scheduler();     // start running processes
+}
 #if 0
+// Start the non-boot processors.
 static void
 bootothers(void)
 {
@@ -90,19 +92,23 @@ bootothers(void)
   struct cpu *c;
   char *stack;
 
-  // Write bootstrap code to unused memory at 0x7000.  The linker has
-  // placed the start of bootother.S there.
-  code = (uchar *) 0x7000;
+  // Write bootstrap code to unused memory at 0x7000.
+  // The linker has placed the image of bootother.S in
+  // _binary_bootother_start.
+  code = (uchar*)0x7000;
   memmove(code, _binary_bootother_start, (uint)_binary_bootother_size);
 
   for(c = cpus; c < cpus+ncpu; c++){
     if(c == cpus+cpunum())  // We've started already.
       continue;
 
-    // Fill in %esp, %eip and start code on cpu.
+    // Tell bootother.S what stack to use and the address of mpmain;
+    // it expects to find these two addresses stored just before
+    // its first instruction.
     stack = kalloc();
     *(void**)(code-4) = stack + KSTACKSIZE;
     *(void**)(code-8) = mpmain;
+
     lapicstartap(c->id, (uint)code);
 
     // Wait for cpu to finish mpmain()
@@ -111,3 +117,6 @@ bootothers(void)
   }
 }
 #endif
+//PAGEBREAK!
+// Blank page.
+

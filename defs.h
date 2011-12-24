@@ -56,10 +56,40 @@ void            ideinit(void);
 void            ideintr(void);
 void            iderw(struct buf*);
 
+#if 0
+// ioapic.c
+void            ioapicenable(int irq, int cpu);
+extern uchar    ioapicid;
+void            ioapicinit(void);
+#endif
+
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);
-void            kinit();
+void            kinit(void);
+
+#if 0
+// kbd.c
+void            kbdintr(void);
+
+// lapic.c
+int             cpunum(void);
+extern volatile uint*    lapic;
+void            lapiceoi(void);
+void            lapicinit(int);
+void            lapicstartap(uchar, uint);
+void            microdelay(int);
+
+// mp.c
+extern int      ismp;
+int             mpbcpu(void);
+void            mpinit(void);
+void            mpstartthem(void);
+
+// picirq.c
+void            picenable(int);
+void            picinit(void);
+#endif
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
@@ -67,6 +97,7 @@ void            pipeclose(struct pipe*, int);
 int             piperead(struct pipe*, char*, int);
 int             pipewrite(struct pipe*, char*, int);
 
+//PAGEBREAK: 16
 // proc.c
 struct proc*    copyproc(struct proc*);
 void            exit(void);
@@ -92,8 +123,8 @@ void            getcallerpcs(void*, uint*);
 int             holding(struct spinlock*);
 void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
-void            pushcli();
-void            popcli();
+void            pushcli(void);
+void            popcli(void);
 
 // string.c
 int             memcmp(const void*, const void*, uint);
@@ -145,8 +176,6 @@ void            switchkvm();
 void            tlb_register(char *va);
 void            do_tlb_miss();
 void            do_tlb_violation();
-
-// mmu.c
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

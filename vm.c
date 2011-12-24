@@ -11,6 +11,14 @@
 static pde_t *kpgdir;  // for use in scheduler()
 extern struct cpu *bcpu;
 
+// Allocate one page table for the machine for the kernel address
+// space for scheduler processes.
+void
+kvmalloc(void)
+{
+  kpgdir = setupkvm();
+}
+
 // Set up CPU's kernel segment descriptors.
 // Run once at boot time on each CPU.
 void
@@ -74,7 +82,7 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
   return 1;
 }
 
-
+# if 0
 // The mappings from logical to linear are one to one (i.e.,
 // segmentation doesn't do anything).
 // There is one page table per process, plus one that's used
@@ -97,14 +105,17 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
 // range from 0 till 640KB (USERTOP), which where the I/O hole starts
 // (both in physical memory and in the kernel's virtual address
 // space).
-
-// Allocate one page table for the machine for the kernel address
-// space for scheduler processes.
-void
-kvmalloc(void)
-{
-  kpgdir = setupkvm();
-}
+static struct kmap {
+  void *p;
+  void *e;
+  int perm;
+} kmap[] = {
+  {(void*)USERTOP,    (void*)0x100000, PTE_W},  // I/O space
+  {(void*)0x100000,   data,            0    },  // kernel text, rodata
+  {data,              (void*)PHYSTOP,  PTE_W},  // kernel data, memory
+  {(void*)0xFE000000, 0,               PTE_W},  // device mappings
+};
+#endif
 
 // Set up kernel part of a page table.
 pde_t*
@@ -137,7 +148,7 @@ vmenable(void)
 // Switch h/w page table register to the kernel-only page table,
 // for when no process is running.
 void
-switchkvm()
+switchkvm(void)
 {
 #ifdef DEBUG
   cprintf("%s:\n", __func__);
@@ -145,7 +156,7 @@ switchkvm()
   // Do nothing because kernel space do not have to be mapped in SH4A
 }
 
-// Switch h/w page table and TSS registers to point to process p.
+// Switch TSS and h/w page table to correspond to process p.
 void
 switchuvm(struct proc *p)
 {
@@ -235,28 +246,31 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
   return 1;
 }
 
-// Allocate memory to the process to bring its size from oldsz to
-// newsz. Allocates physical memory and page table entries. oldsz and
-// newsz need not be page-aligned, nor does newsz have to be larger
-// than oldsz.  Returns the new process size or 0 on error.
+// Allocate page tables and physical memory to grow process from oldsz to
+// newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
+  char *mem;
+  uint a;
+
   if(newsz > USERTOP)
     return 0;
-  char *a = (char *)PGROUNDUP(oldsz);
-  char *last = PGROUNDDOWN(newsz - 1);
-  for (; a <= last; a += PGSIZE){
-    char *mem = kalloc();
+  if(newsz < oldsz)
+    return oldsz;
+
+  a = PGROUNDUP(oldsz);
+  for(; a < newsz; a += PGSIZE){
+    mem = kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
       deallocuvm(pgdir, newsz, oldsz);
       return 0;
     }
     memset(mem, 0, PGSIZE);
-    mappages(pgdir, a, PGSIZE, PADDR(mem), PTEL_DEFAULT);
+    mappages(pgdir, (char*)a, PGSIZE, PADDR(mem), PTEL_DEFAULT);
   }
-  return newsz > oldsz ? newsz : oldsz;
+  return newsz;
 }
 
 // Deallocate user pages to bring the process size from oldsz to
@@ -266,19 +280,24 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
-  char *a = (char *)PGROUNDUP(newsz);
-  char *last = PGROUNDDOWN(oldsz - 1);
-  for(; a <= last; a += PGSIZE){
-    pde_t *pte = walkpgdir(pgdir, a, 0);
+  pde_t *pte;
+  uint a, pa;
+
+  if(newsz >= oldsz)
+    return oldsz;
+
+  a = PGROUNDUP(newsz);
+  for(; a  < oldsz; a += PGSIZE){
+    pte = walkpgdir(pgdir, (char*)a, 0);
     if(pte && (*pte & PTEL_V) != 0){
-      uint pa = PTE_ADDR(*pte);
+      pa = PTE_ADDR(*pte);
       if(pa == 0)
         panic("kfree");
-      kfree((void *) pa);
+      kfree((char*)pa);
       *pte = 0;
     }
   }
-  return newsz < oldsz ? newsz : oldsz;
+  return newsz;
 }
 
 // Free a page table and all the physical memory pages
@@ -291,7 +310,7 @@ freevm(pde_t *pgdir)
 #endif
   uint i;
 
-  if(!pgdir)
+  if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, USERTOP, 0);  // XXX: heavy
   for(i = 0; i < NPDENTRIES; i++){
@@ -299,13 +318,13 @@ freevm(pde_t *pgdir)
 #ifdef DEBUG
       cprintf("%s: free page addr=0x%x\n", __func__, PTE_ADDR(pgdir[i]));
 #endif
-      kfree((void *) PTE_ADDR(pgdir[i]));
+      kfree((void*)PTE_ADDR(pgdir[i]));
     }
   }
 #ifdef DEBUG
   cprintf("%s: free pgdir=0x%x\n", __func__, pgdir);
 #endif
-  kfree((void *) pgdir);
+  kfree((void*)pgdir);
 }
 
 // Given a parent process's page table, create a copy

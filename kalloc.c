@@ -23,9 +23,11 @@ extern unsigned const char *__bss_end;
 void
 kinit(void)
 {
+  char *p;
+
   initlock(&kmem.lock, "kmem");
-  char *p = (char*)PGROUNDUP((uint)&__bss_end);
-  for( ; p + PGSIZE - 1 < (char*) PHYSTOP; p += PGSIZE)
+  p = (char*)PGROUNDUP((uint)&__bss_end);
+  for( ; p + PGSIZE - 1 < (char*)PHYSTOP; p += PGSIZE)
     kfree(p);
 }
 
@@ -39,14 +41,14 @@ kfree(char *v)
 {
   struct run *r;
 
-  if(((uint) v) % PGSIZE || (uint)v < 1024*1024 || (uint)v >= PHYSTOP) 
+  if((uint)v % PGSIZE || (uint)v < 1024*1024 || (uint)v >= PHYSTOP) 
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
   acquire(&kmem.lock);
-  r = (struct run *) v;
+  r = (struct run*)v;
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
@@ -56,7 +58,7 @@ kfree(char *v)
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
 char*
-kalloc()
+kalloc(void)
 {
   struct run *r;
 
