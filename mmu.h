@@ -158,3 +158,5 @@ inline static void set_ttb(uint val)
   * ttb = val;
   return;
 }
+
+typedef uint pte_t;

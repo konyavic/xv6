@@ -24,7 +24,7 @@ main(void)
 {
   tvinit();        // trap vectors
   scif_init();     // serial port
-  ksegment();      // set up segments
+  seginit();      // set up segments
   kinit();         // initialize memory allocator
   jmpkstack();       // call mainc() on a properly-allocated stack 
 }

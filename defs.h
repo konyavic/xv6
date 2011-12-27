@@ -160,7 +160,7 @@ int             scif_get(void);
 int             putc(int c);
 
 // vm.c
-void            ksegment(void);
+void            seginit(void);
 void            kvmalloc(void);
 void            vmenable(void);
 pde_t*          setupkvm(void);
