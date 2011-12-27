@@ -9,7 +9,6 @@
 #define USERTOP  0x80000000
 
 static pde_t *kpgdir;  // for use in scheduler()
-extern struct cpu *bcpu;
 
 // Allocate one page table for the machine for the kernel address
 // space for scheduler processes.
@@ -49,8 +48,7 @@ seginit(void)
 # else
   // MP is not supported
   // SH4 has no segment
-  bcpu = &cpus[0];
-  cpu = bcpu;
+  cpu = &cpus[0];
   proc = 0;
 #endif
 }

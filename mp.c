@@ -6,7 +6,7 @@
 #include "defs.h"
 #include "param.h"
 #include "mp.h"
-#include "x86.h"
+#include "sh4.h"
 #include "mmu.h"
 #include "proc.h"
 
@@ -14,6 +14,7 @@ struct cpu cpus[NCPU];
 static struct cpu *bcpu;
 int ismp;
 int ncpu;
+#if 0
 uchar ioapicid;
 
 int
@@ -93,10 +94,12 @@ mpconfig(struct mp **pmp)
   *pmp = mp;
   return conf;
 }
+#endif
 
 void
 mpinit(void)
 {
+#if 0
   uchar *p, *e;
   struct mp *mp;
   struct mpconf *conf;
@@ -151,4 +154,9 @@ mpinit(void)
     outb(0x22, 0x70);   // Select IMCR
     outb(0x23, inb(0x23) | 1);  // Mask external interrupts.
   }
+#else
+  bcpu = &cpus[0];
+  ncpu = 1;
+  ismp = 0;
+#endif
 }

@@ -8,6 +8,7 @@ OBJS = \
 	memide.o\
 	kalloc.o\
 	main.o\
+	mp.o\
 	pipe.o\
 	proc.o\
 	spinlock.o\
@@ -112,5 +113,5 @@ fs.img: mkfs README $(UPROGS)
 
 clean:
 	rm -rf *.o *.d *.asm *.sym \
-	sh4.ld initcode image linkout fs.img mkfs \
+	sh4.ld initcode image fs.img mkfs \
 	$(UPROGS) 
