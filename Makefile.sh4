@@ -5,7 +5,7 @@ OBJS = \
 	exec.o\
 	file.o\
 	fs.o\
-	ide.o\
+	memide.o\
 	kalloc.o\
 	main.o\
 	pipe.o\
@@ -17,12 +17,12 @@ OBJS = \
 	sysfile.o\
 	sysproc.o\
 	timer.o\
+	trap.o\
 	scif.o\
 	vm.o\
-	trap.o\
 
 # Cross-compiling (e.g., on Mac OS X)
-# TOOLPREFIX = i386-jos-elf-
+#TOOLPREFIX = i386-jos-elf-
 
 # Using native tools (e.g., on X86 Linux)
 TOOLPREFIX =sh-linux-
@@ -72,9 +72,6 @@ initcode: initcode.S
 sh4.ld: sh4.ld.in
 	sed -e "s/TEXT_START/$(TEXT_START)/g" sh4.ld.in > $@
 
-tags: $(OBJS)
-	etags *.S *.c
-
 ULIB = ulib.o usys.o printf.o umalloc.o
 
 _%: %.o $(ULIB) $(LIB)
@@ -108,7 +105,7 @@ UPROGS=\
 	_wc\
 	_zombie\
 
-fs.img: mkfs README $(UPROGS) initcode
+fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
 
 -include *.d

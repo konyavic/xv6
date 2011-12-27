@@ -5,8 +5,8 @@
 #include "param.h"
 #include "mmu.h"
 #include "proc.h"
-#include "sh4.h"
-//#include "traps.h"
+#include "x86.h"
+#include "traps.h"
 #include "spinlock.h"
 #include "buf.h"
 
@@ -18,23 +18,16 @@
 #define IDE_CMD_READ  0x20
 #define IDE_CMD_WRITE 0x30
 
-extern char _binary_fs_img_start[];
-extern char _binary_fs_img_end[];
-extern char _binary_fs_img_size[];
-
 // idequeue points to the buf now being read/written to the disk.
 // idequeue->qnext points to the next buf to be processed.
 // You must hold idelock while manipulating queue.
 
 static struct spinlock idelock;
-#if 0
 static struct buf *idequeue;
 
 static int havedisk1;
-#endif
 static void idestart(struct buf*);
 
-#if 0
 // Wait for IDE disk to become ready.
 static int
 idewait(int checkerr)
@@ -47,15 +40,13 @@ idewait(int checkerr)
     return -1;
   return 0;
 }
-#endif
 
 void
 ideinit(void)
 {
-  //int i;
+  int i;
 
   initlock(&idelock, "ide");
-#if 0
   picenable(IRQ_IDE);
   ioapicenable(IRQ_IDE, ncpu - 1);
   idewait(0);
@@ -71,7 +62,6 @@ ideinit(void)
   
   // Switch back to disk 0.
   outb(0x1f6, 0xe0 | (0<<4));
-#endif
 }
 
 // Start the request for b.  Caller must hold idelock.
@@ -81,7 +71,6 @@ idestart(struct buf *b)
   if(b == 0)
     panic("idestart");
 
-#if 0
   idewait(0);
   outb(0x3f6, 0);  // generate interrupt
   outb(0x1f2, 1);  // number of sectors
@@ -89,27 +78,14 @@ idestart(struct buf *b)
   outb(0x1f4, (b->sector >> 8) & 0xff);
   outb(0x1f5, (b->sector >> 16) & 0xff);
   outb(0x1f6, 0xe0 | ((b->dev&1)<<4) | ((b->sector>>24)&0x0f));
-#else
-  char *fstart = _binary_fs_img_start;
-  char *fdata = fstart + (b->sector * 512);
-#endif
   if(b->flags & B_DIRTY){
-#if 0
     outb(0x1f7, IDE_CMD_WRITE);
     outsl(0x1f0, b->data, 512/4);
-#else
-    memmove(fdata, b->data, 512);
-#endif
   } else {
-#if 0
     outb(0x1f7, IDE_CMD_READ);
-#else
-    memmove(b->data, fdata, 512);
-#endif
   }
 }
 
-#if 0
 // Interrupt handler.
 void
 ideintr(void)
@@ -140,7 +116,6 @@ ideintr(void)
 
   release(&idelock);
 }
-#endif
 
 //PAGEBREAK!
 // Sync buf with disk. 
@@ -149,20 +124,17 @@ ideintr(void)
 void
 iderw(struct buf *b)
 {
-  //struct buf **pp;
+  struct buf **pp;
 
   if(!(b->flags & B_BUSY))
     panic("iderw: buf not busy");
   if((b->flags & (B_VALID|B_DIRTY)) == B_VALID)
     panic("iderw: nothing to do");
-#if 0
   if(b->dev != 0 && !havedisk1)
     panic("iderw: ide disk 1 not present");
-#endif
 
   acquire(&idelock);
 
-#if 0
   // Append b to idequeue.
   b->qnext = 0;
   for(pp=&idequeue; *pp; pp=&(*pp)->qnext)
@@ -173,12 +145,6 @@ iderw(struct buf *b)
   if(idequeue == b)
     idestart(b);
   
-#else
-  idestart(b);
-  b->flags |= B_VALID;
-  b->flags &= ~B_DIRTY;
-#endif
-
   // Wait for request to finish.
   // Assuming will not sleep too long: ignore proc->killed.
   while((b->flags & (B_VALID|B_DIRTY)) != B_VALID){
