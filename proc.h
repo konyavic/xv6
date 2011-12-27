@@ -1,3 +1,14 @@
+#if 0
+// Segments in proc->gdt.
+// Also known to bootasm.S and trapasm.S
+#define SEG_KCODE 1  // kernel code
+#define SEG_KDATA 2  // kernel data+stack
+#define SEG_KCPU  3  // kernel per-cpu data
+#define SEG_UCODE 4  // user code
+#define SEG_UDATA 5  // user data+stack
+#define SEG_TSS   6  // this process's task state
+#define NSEGS     7
+#endif
 
 // Per-CPU state
 struct cpu {
@@ -43,6 +54,13 @@ struct proc *proc;     // Current proc on this cpu.
 // at the "Switch stacks" comment. Switch doesn't save eip explicitly,
 // but it is on the stack and allocproc() manipulates it.
 struct context {
+#if 0
+  uint edi;
+  uint esi;
+  uint ebx;
+  uint ebp;
+  uint eip;
+#else
   /* general purpose registers (bank0) */
   uint r0;
   uint r1;
@@ -81,6 +99,7 @@ struct context {
   uint pr;
   uint sr;
   uint r15;
+#endif
 };
 
 struct trapframe {

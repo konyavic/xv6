@@ -1,5 +1,3 @@
-struct cpu;
-struct proc;
 struct buf;
 struct context;
 struct file;
@@ -141,7 +139,7 @@ int             argptr(int, char**, int);
 int             argstr(int, char**);
 int             fetchint(struct proc*, uint, int*);
 int             fetchstr(struct proc*, uint, char**);
-void            do_syscall(void);
+void            syscall(void);
 
 // timer.c
 //void            timerinit(void);

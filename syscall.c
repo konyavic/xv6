@@ -47,6 +47,9 @@ fetchstr(struct proc *p, uint addr, char **pp)
 int
 argint(int n, int *ip)
 {
+#if 0
+  return fetchint(proc, proc->tf->esp + 4 + 4*n, ip);
+#else
   int x;
   switch (n) {
     case 0:
@@ -71,6 +74,7 @@ argint(int n, int *ip)
       x = fetchint(proc, proc->tf->sgr + 4*n, ip);
       return x;
   }
+#endif
 }
 
 // Fetch the nth word-sized system call argument as a pointer
@@ -149,9 +153,21 @@ static int (*syscalls[])(void) = {
 };
 
 void
-do_syscall(void)
+syscall(void)
 {
-  int num = *((int *)TRA) >> 2;
+  int num;
+  
+#if 0
+  num = proc->tf->eax;
+  if(num >= 0 && num < NELEM(syscalls) && syscalls[num])
+    proc->tf->eax = syscalls[num]();
+  else {
+    cprintf("%d %s: unknown sys call %d\n",
+            proc->pid, proc->name, num);
+    proc->tf->eax = -1;
+  }
+#else
+  num = *((int *)TRA) >> 2;
   int ret;
 #ifdef DEBUGxxx
   cprintf("%s: tra=%d, spc=0x%x\n", 
@@ -165,4 +181,5 @@ do_syscall(void)
     ret = -1;
   }
   asm volatile("ldc %0, r0_bank" :: "r"(ret));
+#endif
 }

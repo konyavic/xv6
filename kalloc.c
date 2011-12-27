@@ -72,6 +72,6 @@ kalloc(void)
 #ifdef DEBUG
   cprintf("%s: 0x%x\n", __func__, r);
 #endif
-  return (char*) r;
+  return (char*)r;
 }
 

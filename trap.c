@@ -28,7 +28,7 @@ tvinit(void)
   register_handler(PERM_W_EXPEVT, do_tlb_violation);
   register_handler(ADDR_R_EXPEVT, do_tlb_violation);
   register_handler(ADDR_W_EXPEVT, do_tlb_violation);
-  register_handler(SYSCALL_EXPEVT, do_syscall);
+  register_handler(SYSCALL_EXPEVT, syscall);
 }
 
 void register_handler(uint evt, handler_t handler) 
