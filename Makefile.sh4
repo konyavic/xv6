@@ -29,17 +29,18 @@ OBJS = \
 TOOLPREFIX =sh-linux-
 
 # Machine-specific settings
-MACH = SH7751	# SH7751, SH7780 or RP1
+MACH ?=R2D
 
-ifeq ($(MACH),SH7751)
-	TEXT_START = 0x8c800000
-	PHYSTOP = 0x8d000000
-endif
-ifeq ($(MACH),SH7780)
+ifeq ($(MACH),R2D)
+	ARCH =SH7751
+	TEXT_START =0x8c800000
+	PHYSTOP =0x8d000000
+else ifeq ($(MACH),SH2007)
+	ARCH =SH7780
 	TEXT_START = 0x88210000
 	PHYSTOP = 0x89000000
-endif
-ifeq ($(MACH),RP1)
+else ifeq ($(MACH),RP1)
+	ARCH =RP1
 	TEXT_START = 0x88210000
 	PHYSTOP = 0x89000000
 endif
@@ -52,7 +53,7 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 CFLAGS = -fno-builtin -Wall -MD -ggdb -nostdinc \
 	 -I. -I$(shell $(CC) -print-file-name=include) \
-	 -m4-nofpu -D$(MACH) -DPHYSTOP=$(PHYSTOP)
+	 -m4-nofpu -D$(ARCH) -DPHYSTOP=$(PHYSTOP)
 ASFLAGS = -m4-nofpu -D$(MACH) -DPHYSTOP=$(PHYSTOP)
 
 # FreeBSD ld wants ``elf_i386_fbsd''
@@ -111,7 +112,9 @@ fs.img: mkfs README $(UPROGS)
 
 -include *.d
 
-clean:
-	rm -rf *.o *.d *.asm *.sym \
-	sh4.ld initcode image fs.img mkfs \
-	$(UPROGS) 
+clean: 
+	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+	*.o *.d *.asm *.sym vectors.S parport.out \
+	bootblock kernel xv6.img fs.img mkfs \
+	sh4.ld initcode bootimg bootimg.bin \
+	$(UPROGS)

@@ -6,7 +6,6 @@
 #include "proc.h"
 #include "elf.h"
 
-#define USERTOP  0x80000000
 
 static pde_t *kpgdir;  // for use in scheduler()
 

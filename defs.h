@@ -87,6 +87,8 @@ void            mpstartthem(void);
 // picirq.c
 void            picenable(int);
 void            picinit(void);
+#else
+void            mpinit(void);
 #endif
 
 // pipe.c
