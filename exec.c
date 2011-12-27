@@ -20,20 +20,18 @@ exec(char *path, char **argv)
   cprintf("%s: oldpgdir=0x%x\n", __func__, proc->pgdir);
   dump_pde(proc->pgdir, 0, 2);
 #endif
-  char *mem, *s, *last;
-  int i, argc, arglen, len, off;
-  uint sz, sp, spbottom, argp;
+  char *s, *last;
+  int i, off;
+  uint argc, sz, sp, ustack[MAXARG+1];
   struct elfhdr elf;
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
 
-  pgdir = 0;
-  sz = 0;
-
   if((ip = namei(path)) == 0)
     return -1;
   ilock(ip);
+  pgdir = 0;
 
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
@@ -41,13 +39,14 @@ exec(char *path, char **argv)
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
-  if(!(pgdir = setupkvm()))
+  if((pgdir = setupkvm()) == 0)
     goto bad;
 
 #ifdef DEBUG
   cprintf("%s: start of loading\n", __func__);
 #endif
   // Load program into memory.
+  sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -55,57 +54,55 @@ exec(char *path, char **argv)
       continue;
     if(ph.memsz < ph.filesz)
       goto bad;
-    if(!(sz = allocuvm(pgdir, sz, ph.va + ph.memsz)))
+    if((sz = allocuvm(pgdir, sz, ph.va + ph.memsz)) == 0)
       goto bad;
-    if(!loaduvm(pgdir, (char *)ph.va, ip, ph.offset, ph.filesz))
+    if(loaduvm(pgdir, (char*)ph.va, ip, ph.offset, ph.filesz) < 0)
       goto bad;
   }
   iunlockput(ip);
+  ip = 0;
 #ifdef DEBUG
   cprintf("%s: end of loading\n", __func__);
 #endif
 
-  // Allocate and initialize stack at sz
-  sz = spbottom = PGROUNDUP(sz);
-  if(!(sz = allocuvm(pgdir, sz, sz + PGSIZE)))
+  // Allocate a one-page stack at the next page boundary
+  sz = PGROUNDUP(sz);
+  if((sz = allocuvm(pgdir, sz, sz + PGSIZE)) == 0)
     goto bad;
-  mem = uva2ka(pgdir, (char *)spbottom);
 #ifdef DEBUGxxx
   cprintf("%s: allocated user stack\n", __func__);
   dump_pgd(pgdir, 2);
 #endif
 
-  arglen = 0;
-  for(argc=0; argv[argc]; argc++)
-    arglen += strlen(argv[argc]) + 1;
-  arglen = (arglen+3) & ~3;
-
+  // Push argument strings, prepare rest of stack in ustack.
   sp = sz;
-  argp = sz - arglen - 4*(argc+1);
-
-  // Copy argv strings and pointers to stack.
-  *(uint*)(mem+argp-spbottom + 4*argc) = 0;  // argv[argc]
-  for(i=argc-1; i>=0; i--){
-    len = strlen(argv[i]) + 1;
-    sp -= len;
-    memmove(mem+sp-spbottom, argv[i], len);
-    *(uint*)(mem+argp-spbottom + 4*i) = sp;  // argv[i]
+  for(argc = 0; argv[argc]; argc++) {
+    if(argc >= MAXARG)
+      goto bad;
+    sp -= strlen(argv[argc]) + 1;
+    sp &= ~3;
+    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+      goto bad;
+    ustack[argc] = sp;
   }
+  ustack[argc] = 0;
 
-  // Stack frame for main(argc, argv), below arguments.
 #if 0
-  sp = argp;
-  sp -= 4;
-  *(uint*)(mem+sp-spbottom) = argp;
-  sp -= 4;
-  *(uint*)(mem+sp-spbottom) = argc;
-  sp -= 4;
-  *(uint*)(mem+sp-spbottom) = 0xffffffff;   // fake return pc
+  ustack[0] = 0xffffffff;  // fake return PC
+  ustack[1] = argc;
+  ustack[2] = sp - (argc+1)*4;  // argv pointer
+
+  sp -= (3+argc+1) * 4;
+  if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
+    goto bad;
 #else
-  sp = argp;
+  sp -= (argc+1) * 4;
+  if(copyout(pgdir, sp, ustack, (argc+1)*4) < 0)
+    goto bad;
+
   uint fakeret = 0xffffffff;
   asm volatile("ldc %0, r4_bank" :: "r"(argc));
-  asm volatile("ldc %0, r5_bank" :: "r"(argp));
+  asm volatile("ldc %0, r5_bank" :: "r"(sp));
   asm volatile("lds %0, pr" :: "r"(fakeret));  // fake return pc
 #endif
 
@@ -122,6 +119,7 @@ exec(char *path, char **argv)
 #if 0
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
+  switchuvm(proc);
 #else
   proc->tf->spc = elf.entry;
   proc->tf->sgr = sp;
@@ -129,9 +127,9 @@ exec(char *path, char **argv)
   cprintf("%s: spc=0x%x, sgr=0x%x\n", 
       __func__, proc->tf->spc, proc->tf->sgr);
 #endif
+  switchuvm(proc);
 #endif
 
-  switchuvm(proc); 
 
   freevm(oldpgdir);
 
@@ -141,7 +139,9 @@ exec(char *path, char **argv)
   return 0;
 
  bad:
-  if(pgdir) freevm(pgdir);
-  iunlockput(ip);
+  if(pgdir)
+    freevm(pgdir);
+  if(ip)
+    iunlockput(ip);
   return -1;
 }

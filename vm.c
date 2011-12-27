@@ -284,9 +284,9 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
     else
       n = PGSIZE;
     if(readi(ip, (char*)pa, offset+i, n) != n)
-      return 0;
+      return -1;
   }
-  return 1;
+  return 0;
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to

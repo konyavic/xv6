@@ -144,20 +144,35 @@ int             fetchstr(struct proc*, uint, char**);
 void            do_syscall(void);
 
 // timer.c
+//void            timerinit(void);
 void            timer_init(void);
 
+#if 0
+// trap.c
+void            idtinit(void);
+extern uint     ticks;
+void            tvinit(void);
+#else
 // trap.c
 extern uint     ticks;
 extern handler_t  vectors[];
 void            tvinit(void);
 void            register_handler(uint evt, handler_t handler);
+#endif
 extern struct spinlock tickslock;
 
+#if 0
+// uart.c
+void            uartinit(void);
+void            uartintr(void);
+void            uartputc(int);
+#else
 // scif.c
 void            scif_init(void);
 int             scif_putc(int c);
 int             scif_get(void);
 int             putc(int c);
+#endif
 
 // vm.c
 void            seginit(void);
@@ -169,10 +184,11 @@ int             allocuvm(pde_t*, uint, uint);
 int             deallocuvm(pde_t*, uint, uint);
 void            freevm(pde_t*);
 void            inituvm(pde_t*, char*, uint);
-int             loaduvm(pde_t*, char*, struct inode *, uint, uint);
-pde_t*          copyuvm(pde_t*,uint);
+int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
+pde_t*          copyuvm(pde_t*, uint);
 void            switchuvm(struct proc*);
-void            switchkvm();
+void            switchkvm(void);
+int             copyout(pde_t*, uint, void*, uint);
 void            tlb_register(char *va);
 void            do_tlb_miss();
 void            do_tlb_violation();
