@@ -1,16 +1,16 @@
 # basic headers
 types.h
 param.h
+memlayout.h
 defs.h
 x86.h
 asm.h
 mmu.h
 elf.h
 
-# startup
-bootasm.S
-bootother.S
-bootmain.c
+# entering xv6
+entry.S
+entryother.S
 main.c
 
 # locks
@@ -18,12 +18,12 @@ spinlock.h
 spinlock.c
 
 # processes
+vm.c
 proc.h
 proc.c
 swtch.S
 kalloc.c
-data.S
-vm.c
+
 # system calls
 traps.h
 vectors.pl
@@ -41,6 +41,7 @@ fs.h
 file.h
 ide.c
 bio.c
+log.c
 fs.c
 file.c
 sysfile.c
@@ -48,7 +49,6 @@ exec.c
 
 # pipes
 pipe.c
-
 
 # string operations
 string.c
@@ -64,7 +64,6 @@ kbd.c
 console.c
 timer.c
 uart.c
-multiboot.S
 
 # user-level
 initcode.S
@@ -72,7 +71,7 @@ usys.S
 init.c
 sh.c
 
-
-
-
+# bootloader
+bootasm.S
+bootmain.c
 

@@ -9,6 +9,7 @@ OBJS = \
 	kalloc.o\
 	kbd.o\
 	lapic.o\
+	log.o\
 	main.o\
 	mp.o\
 	picirq.o\
@@ -71,9 +72,10 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
-CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror
+#CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
+CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
-ASFLAGS = -m32 -gdwarf-2
+ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
 
@@ -95,11 +97,11 @@ bootblock: bootasm.S bootmain.c
 	$(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
 	./sign.pl bootblock
 
-bootother: bootother.S
-	$(CC) $(CFLAGS) -nostdinc -I. -c bootother.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o bootother.out bootother.o
-	$(OBJCOPY) -S -O binary bootother.out bootother
-	$(OBJDUMP) -S bootother.o > bootother.asm
+entryother: entryother.S
+	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c entryother.S
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o bootblockother.o entryother.o
+	$(OBJCOPY) -S -O binary -j .text bootblockother.o entryother
+	$(OBJDUMP) -S bootblockother.o > entryother.asm
 
 initcode: initcode.S
 	$(CC) $(CFLAGS) -nostdinc -I. -c initcode.S
@@ -107,8 +109,8 @@ initcode: initcode.S
 	$(OBJCOPY) -S -O binary initcode.out initcode
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
-kernel: $(OBJS) multiboot.o data.o bootother initcode
-	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernel multiboot.o data.o $(OBJS) -b binary initcode bootother
+kernel: $(OBJS) entry.o entryother initcode kernel.ld
+	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o $(OBJS) -b binary initcode entryother
 	$(OBJDUMP) -S kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
@@ -119,12 +121,12 @@ kernel: $(OBJS) multiboot.o data.o bootother initcode
 # great for testing the kernel on real hardware without
 # needing a scratch disk.
 MEMFSOBJS = $(filter-out ide.o,$(OBJS)) memide.o
-kernelmemfs: $(MEMFSOBJS) multiboot.o data.o bootother initcode fs.img
-	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernelmemfs multiboot.o data.o $(MEMFSOBJS) -b binary initcode bootother fs.img
+kernelmemfs: $(MEMFSOBJS) entry.o entryother initcode fs.img
+	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernelmemfs entry.o  $(MEMFSOBJS) -b binary initcode entryother fs.img
 	$(OBJDUMP) -S kernelmemfs > kernelmemfs.asm
 	$(OBJDUMP) -t kernelmemfs | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernelmemfs.sym
 
-tags: $(OBJS) bootother.S _init
+tags: $(OBJS) entryother.S _init
 	etags *.S *.c
 
 vectors.S: vectors.pl
@@ -170,13 +172,14 @@ fs.img: mkfs README $(UPROGS)
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.o *.d *.asm *.sym vectors.S parport.out \
-	bootblock kernel xv6.img fs.img mkfs \
+	*.o *.d *.asm *.sym vectors.S bootblock entryother \
+	initcode initcode.out kernel xv6.img fs.img kernelmemfs mkfs \
+	.gdbinit \
 	$(UPROGS)
 
 # make a printout
 FILES = $(shell grep -v '^\#' runoff.list)
-PRINT = runoff.list runoff.spec $(FILES)
+PRINT = runoff.list runoff.spec README toc.hdr toc.ftr $(FILES)
 
 xv6.pdf: $(PRINT)
 	./runoff
@@ -199,7 +202,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 ifndef CPUS
 CPUS := 2
 endif
-QEMUOPTS = -hdb fs.img xv6.img -smp $(CPUS)
+QEMUOPTS = -hdb fs.img xv6.img -smp $(CPUS) -m 512 $(QEMUEXTRA)
 
 qemu: fs.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)

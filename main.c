@@ -1,15 +1,13 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
+//#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "sh4.h"
 
-static void bootothers(void);
-static void mpmain(void);
-void jmpkstack(void)  __attribute__((noreturn));
-void mainc(void);
 unsigned char xv6_stack[STACK_SIZE];
+static void mpmain(void)  __attribute__((noreturn));
 
 // Bootstrap processor starts running C code here.
 // Allocate a real stack and switch to it, first
@@ -17,44 +15,13 @@ unsigned char xv6_stack[STACK_SIZE];
 int
 main(void)
 {
+  kvmalloc();      // kernel page table
   mpinit();        // collect info about this machine
   tvinit();        // trap vectors
   scif_init();     // serial port
   seginit();       // set up segments
-  kinit();         // initialize memory allocator
-  jmpkstack();       // call mainc() on a properly-allocated stack 
-}
-
-void
-jmpkstack(void)
-{
-  char *kstack, *top;
-  
-  kstack = kalloc();
-  if(kstack == 0)
-    panic("jmpkstack kalloc");
-  top = kstack + PGSIZE;
-#if 0
-  asm volatile("movl %0,%%esp; call mainc" : : "r" (top));
-#else
-#ifdef DEBUG
-  cprintf("%s: kstack=0x%x\n", __func__, kstack);
-  cprintf("%s: top=0x%x\n", __func__, top);
-#endif
-  asm volatile("mov %0, r15\n" : : "r"(top));
-  mainc(); 
-#endif
-  panic("jmpkstack");
-}
-
-// Set up hardware and software.
-// Runs only on the boostrap processor.
-void
-mainc(void)
-{
   cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
   consoleinit();   // I/O devices & their interrupts
-  kvmalloc();      // initialize the kernel page table
   pinit();         // process table
   binit();         // buffer cache
   fileinit();      // file table
@@ -66,64 +33,78 @@ mainc(void)
 #else
   timer_init();    // uniprocessor timer
 #endif
-  userinit();      // first user process
-  bootothers();    // start other processors
-#ifdef DEBUG
-  cprintf("%s: userinit done\n", __func__);
-#endif
-
+  //startothers();    // start other processors (must come before kinit)
+  kinit();         // initialize memory allocator
+  userinit();      // first user process  (must come after kinit)
   // Finish setting up this processor in mpmain.
   mpmain();
 }
 
+
 // Common CPU setup code.
-// Bootstrap CPU comes here from mainc().
-// Other CPUs jump here from bootother.S.
 static void
 mpmain(void)
 {
-  vmenable();        // turn on paging
   cprintf("cpu%d: starting\n", cpu->id);
-  cpu->booted = 1;
-
+  cpu->started = 1;
   scheduler();     // start running processes
 }
 
-// Start the non-boot processors.
-static void
-bootothers(void)
-{
 #if 0
-  extern uchar _binary_bootother_start[], _binary_bootother_size[];
+pde_t entrypgdir[];  // For entry.S
+
+// Start the non-boot (AP) processors.
+static void
+startothers(void)
+{
+  extern uchar _binary_entryother_start[], _binary_entryother_size[];
   uchar *code;
   struct cpu *c;
   char *stack;
 
-  // Write bootstrap code to unused memory at 0x7000.
-  // The linker has placed the image of bootother.S in
-  // _binary_bootother_start.
-  code = (uchar*)0x7000;
-  memmove(code, _binary_bootother_start, (uint)_binary_bootother_size);
+  // Write entry code to unused memory at 0x7000.
+  // The linker has placed the image of entryother.S in
+  // _binary_entryother_start.
+  code = p2v(0x7000);
+  memmove(code, _binary_entryother_start, (uint)_binary_entryother_size);
 
   for(c = cpus; c < cpus+ncpu; c++){
     if(c == cpus+cpunum())  // We've started already.
       continue;
 
-    // Tell bootother.S what stack to use and the address of mpmain;
-    // it expects to find these two addresses stored just before
-    // its first instruction.
-    stack = kalloc();
+    // Tell entryother.S what stack to use, where to enter, and what 
+    // pgdir to use. We cannot use kpgdir yet, because the AP processor
+    // is running in low  memory, so we use entrypgdir for the APs too.
+    // kalloc can return addresses above 4Mbyte (the machine may have 
+    // much more physical memory than 4Mbyte), which aren't mapped by
+    // entrypgdir, so we must allocate a stack using enter_alloc(); 
+    // this introduces the constraint that xv6 cannot use kalloc until 
+    // after these last enter_alloc invocations.
+    stack = enter_alloc();
     *(void**)(code-4) = stack + KSTACKSIZE;
-    *(void**)(code-8) = mpmain;
+    *(void**)(code-8) = mpenter;
+    *(int**)(code-12) = (void *) v2p(entrypgdir);
 
-    lapicstartap(c->id, (uint)code);
+    lapicstartap(c->id, v2p(code));
 
-    // Wait for cpu to finish mpmain()
-    while(c->booted == 0)
+    // wait for cpu to finish mpmain()
+    while(c->started == 0)
       ;
   }
-#endif
 }
+
+// Boot page table used in entry.S and entryother.S.
+// Page directories (and page tables), must start on a page boundary,
+// hence the "__aligned__" attribute.  
+// Use PTE_PS in page directory entry to enable 4Mbyte pages.
+__attribute__((__aligned__(PGSIZE)))
+pde_t entrypgdir[NPDENTRIES] = {
+  // Map VA's [0, 4MB) to PA's [0, 4MB)
+  [0] = (0) + PTE_P + PTE_W + PTE_PS,
+  // Map VA's [KERNBASE, KERNBASE+4MB) to PA's [0, 4MB)
+  [KERNBASE>>PDXSHIFT] = (0) + PTE_P + PTE_W + PTE_PS,
+};
+#endif
 
 //PAGEBREAK!
 // Blank page.

@@ -1,12 +1,5 @@
 #if 0
 // Segments in proc->gdt.
-// Also known to bootasm.S and trapasm.S
-#define SEG_KCODE 1  // kernel code
-#define SEG_KDATA 2  // kernel data+stack
-#define SEG_KCPU  3  // kernel per-cpu data
-#define SEG_UCODE 4  // user code
-#define SEG_UDATA 5  // user data+stack
-#define SEG_TSS   6  // this process's task state
 #define NSEGS     7
 #endif
 
@@ -18,7 +11,7 @@ struct cpu {
   struct taskstate ts;         // Used by x86 to find stack for interrupt
   struct segdesc gdt[NSEGS];   // x86 global descriptor table
 #endif
-  volatile uint booted;        // Has the CPU started?
+  volatile uint started;        // Has the CPU started?
   int ncli;                    // Depth of pushcli nesting.
   int intena;                  // Were interrupts enabled before pushcli?
   

@@ -28,7 +28,6 @@ struct inode {
 #define I_BUSY 0x1
 #define I_VALID 0x2
 
-
 // device implementations
 
 struct devsw {

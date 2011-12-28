@@ -67,8 +67,11 @@ fileclose(struct file *f)
   
   if(ff.type == FD_PIPE)
     pipeclose(ff.pipe, ff.writable);
-  else if(ff.type == FD_INODE)
+  else if(ff.type == FD_INODE){
+    begin_trans();
     iput(ff.ip);
+    commit_trans();
+  }
 }
 
 // Get metadata about file f.
@@ -104,6 +107,7 @@ fileread(struct file *f, char *addr, int n)
   panic("fileread");
 }
 
+//PAGEBREAK!
 // Write to file f.  Addr is kernel address.
 int
 filewrite(struct file *f, char *addr, int n)
@@ -115,11 +119,33 @@ filewrite(struct file *f, char *addr, int n)
   if(f->type == FD_PIPE)
     return pipewrite(f->pipe, addr, n);
   if(f->type == FD_INODE){
-    ilock(f->ip);
-    if((r = writei(f->ip, addr, f->off, n)) > 0)
-      f->off += r;
-    iunlock(f->ip);
-    return r;
+    // write a few blocks at a time to avoid exceeding
+    // the maximum log transaction size, including
+    // i-node, indirect block, allocation blocks,
+    // and 2 blocks of slop for non-aligned writes.
+    // this really belongs lower down, since writei()
+    // might be writing a device like the console.
+    int max = ((LOGSIZE-1-1-2) / 2) * 512;
+    int i = 0;
+    while(i < n){
+      int n1 = n - i;
+      if(n1 > max)
+        n1 = max;
+
+      begin_trans();
+      ilock(f->ip);
+      if ((r = writei(f->ip, addr + i, f->off, n1)) > 0)
+        f->off += r;
+      iunlock(f->ip);
+      commit_trans();
+
+      if(r < 0)
+        break;
+      if(r != n1)
+        panic("short filewrite");
+      i += r;
+    }
+    return i == n ? n : -1;
   }
   panic("filewrite");
 }

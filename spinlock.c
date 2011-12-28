@@ -4,6 +4,7 @@
 #include "defs.h"
 #include "param.h"
 #include "sh4.h"
+//#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "spinlock.h"

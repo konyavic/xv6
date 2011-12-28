@@ -116,11 +116,16 @@ sys_link(void)
     return -1;
   if((ip = namei(old)) == 0)
     return -1;
+
+  begin_trans();
+
   ilock(ip);
   if(ip->type == T_DIR){
     iunlockput(ip);
+    commit_trans();
     return -1;
   }
+
   ip->nlink++;
   iupdate(ip);
   iunlock(ip);
@@ -134,6 +139,9 @@ sys_link(void)
   }
   iunlockput(dp);
   iput(ip);
+
+  commit_trans();
+
   return 0;
 
 bad:
@@ -141,6 +149,7 @@ bad:
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+  commit_trans();
   return -1;
 }
 
@@ -173,26 +182,24 @@ sys_unlink(void)
     return -1;
   if((dp = nameiparent(path, name)) == 0)
     return -1;
+
+  begin_trans();
+
   ilock(dp);
 
   // Cannot unlink "." or "..".
-  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0){
-    iunlockput(dp);
-    return -1;
-  }
+  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
 
-  if((ip = dirlookup(dp, name, &off)) == 0){
-    iunlockput(dp);
-    return -1;
-  }
+  if((ip = dirlookup(dp, name, &off)) == 0)
+    goto bad;
   ilock(ip);
 
   if(ip->nlink < 1)
     panic("unlink: nlink < 1");
   if(ip->type == T_DIR && !isdirempty(ip)){
     iunlockput(ip);
-    iunlockput(dp);
-    return -1;
+    goto bad;
   }
 
   memset(&de, 0, sizeof(de));
@@ -207,7 +214,15 @@ sys_unlink(void)
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+
+  commit_trans();
+
   return 0;
+
+bad:
+  iunlockput(dp);
+  commit_trans();
+  return -1;
 }
 
 static struct inode*
@@ -251,6 +266,7 @@ create(char *path, short type, short major, short minor)
     panic("create: dirlink");
 
   iunlockput(dp);
+
   return ip;
 }
 
@@ -265,7 +281,10 @@ sys_open(void)
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
   if(omode & O_CREATE){
-    if((ip = create(path, T_FILE, 0, 0)) == 0)
+    begin_trans();
+    ip = create(path, T_FILE, 0, 0);
+    commit_trans();
+    if(ip == 0)
       return -1;
   } else {
     if((ip = namei(path)) == 0)
@@ -299,9 +318,13 @@ sys_mkdir(void)
   char *path;
   struct inode *ip;
 
-  if(argstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0)
+  begin_trans();
+  if(argstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
+    commit_trans();
     return -1;
+  }
   iunlockput(ip);
+  commit_trans();
   return 0;
 }
 
@@ -313,12 +336,16 @@ sys_mknod(void)
   int len;
   int major, minor;
   
+  begin_trans();
   if((len=argstr(0, &path)) < 0 ||
      argint(1, &major) < 0 ||
      argint(2, &minor) < 0 ||
-     (ip = create(path, T_DEV, major, minor)) == 0)
+     (ip = create(path, T_DEV, major, minor)) == 0){
+    commit_trans();
     return -1;
+  }
   iunlockput(ip);
+  commit_trans();
   return 0;
 }
 

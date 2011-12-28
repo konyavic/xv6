@@ -9,6 +9,7 @@
 #include "spinlock.h"
 #include "fs.h"
 #include "file.h"
+//#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "sh4.h"
@@ -46,8 +47,8 @@ printint(int xx, int base, int sign)
   while(--i >= 0)
     consputc(buf[i]);
 }
-
 //PAGEBREAK: 50
+
 // Print to the console. only understands %d, %x, %p, %s.
 void
 cprintf(char *fmt, ...)
@@ -59,6 +60,9 @@ cprintf(char *fmt, ...)
   locking = cons.locking;
   if(locking)
     acquire(&cons.lock);
+
+  if (fmt == 0)
+    panic("null fmt");
 
   va_start(ap, fmt);
   state = 0;
@@ -123,7 +127,7 @@ panic(char *s)
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
 #if 0
-static ushort *crt = (ushort*)0xb8000;  // CGA memory
+static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 static void
 cgaputc(int c)

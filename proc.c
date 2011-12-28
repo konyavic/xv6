@@ -1,6 +1,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
+//#include "memlayout.h"
 #include "mmu.h"
 #include "sh4.h"
 #include "proc.h"
@@ -49,7 +50,7 @@ found:
   p->pid = nextpid++;
   release(&ptable.lock);
 
-  // Allocate kernel stack if possible.
+  // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
     return 0;
@@ -95,7 +96,7 @@ userinit(void)
   
   p = allocproc();
   initproc = p;
-  if((p->pgdir = setupkvm()) == 0)
+  if((p->pgdir = setupkvm(kalloc)) == 0)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
@@ -382,8 +383,17 @@ forkret(void)
   cprintf("%s: proc->tf->sgr=0x%x\n", __func__, proc->tf->sgr);
   cprintf("%s: proc->tf->ssr=0x%x\n", __func__, proc->tf->ssr);
 #endif
+  static int first = 1;
   // Still holding ptable.lock from scheduler.
   release(&ptable.lock);
+
+  if (first) {
+    // Some initialization functions must be run in the context
+    // of a regular process (e.g., they call sleep), and thus cannot 
+    // be run from main().
+    first = 0;
+    initlog();
+  }
   
   // Return to "caller", actually trapret (see allocproc).
   asm volatile(

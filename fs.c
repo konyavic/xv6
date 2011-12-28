@@ -25,7 +25,7 @@
 static void itrunc(struct inode*);
 
 // Read the super block.
-static void
+void
 readsb(int dev, struct superblock *sb)
 {
   struct buf *bp;
@@ -43,13 +43,13 @@ bzero(int dev, int bno)
   
   bp = bread(dev, bno);
   memset(bp->data, 0, BSIZE);
-  bwrite(bp);
+  log_write(bp);
   brelse(bp);
 }
 
 // Blocks. 
 
-// Allocate a disk block.
+// Allocate a zeroed disk block.
 static uint
 balloc(uint dev)
 {
@@ -61,12 +61,13 @@ balloc(uint dev)
   readsb(dev, &sb);
   for(b = 0; b < sb.size; b += BPB){
     bp = bread(dev, BBLOCK(b, sb.ninodes));
-    for(bi = 0; bi < BPB; bi++){
+    for(bi = 0; bi < BPB && bi < (sb.size - b); bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use on disk.
-        bwrite(bp);
+        log_write(bp);
         brelse(bp);
+        bzero(dev, b + bi);
         return b + bi;
       }
     }
@@ -83,8 +84,6 @@ bfree(int dev, uint b)
   struct superblock sb;
   int bi, m;
 
-  bzero(dev, b);
-
   readsb(dev, &sb);
   bp = bread(dev, BBLOCK(b, sb.ninodes));
   bi = b % BPB;
@@ -92,7 +91,7 @@ bfree(int dev, uint b)
   if((bp->data[bi/8] & m) == 0)
     panic("freeing free block");
   bp->data[bi/8] &= ~m;  // Mark block free on disk.
-  bwrite(bp);
+  log_write(bp);
   brelse(bp);
 }
 
@@ -159,7 +158,7 @@ ialloc(uint dev, short type)
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
-      bwrite(bp);   // mark it allocated on the disk
+      log_write(bp);   // mark it allocated on the disk
       brelse(bp);
       return iget(dev, inum);
     }
@@ -183,7 +182,7 @@ iupdate(struct inode *ip)
   dip->nlink = ip->nlink;
   dip->size = ip->size;
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
-  bwrite(bp);
+  log_write(bp);
   brelse(bp);
 }
 
@@ -339,7 +338,7 @@ bmap(struct inode *ip, uint bn)
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
       a[bn] = addr = balloc(ip->dev);
-      bwrite(bp);
+      log_write(bp);
     }
     brelse(bp);
     return addr;
@@ -437,13 +436,13 @@ writei(struct inode *ip, char *src, uint off, uint n)
   if(off > ip->size || off + n < off)
     return -1;
   if(off + n > MAXFILE*BSIZE)
-    n = MAXFILE*BSIZE - off;
+    return -1;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(bp->data + off%BSIZE, src, m);
-    bwrite(bp);
+    log_write(bp);
     brelse(bp);
   }
 
@@ -470,30 +469,25 @@ struct inode*
 dirlookup(struct inode *dp, char *name, uint *poff)
 {
   uint off, inum;
-  struct buf *bp;
-  struct dirent *de;
+  struct dirent de;
 
   if(dp->type != T_DIR)
     panic("dirlookup not DIR");
 
-  for(off = 0; off < dp->size; off += BSIZE){
-    bp = bread(dp->dev, bmap(dp, off / BSIZE));
-    for(de = (struct dirent*)bp->data;
-        de < (struct dirent*)(bp->data + BSIZE);
-        de++){
-      if(de->inum == 0)
-        continue;
-      if(namecmp(name, de->name) == 0){
-        // entry matches path element
-        if(poff)
-          *poff = off + (uchar*)de - bp->data;
-        inum = de->inum;
-        brelse(bp);
-        return iget(dp->dev, inum);
-      }
+  for(off = 0; off < dp->size; off += sizeof(de)){
+    if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+      panic("dirlink read");
+    if(de.inum == 0)
+      continue;
+    if(namecmp(name, de.name) == 0){
+      // entry matches path element
+      if(poff)
+        *poff = off;
+      inum = de.inum;
+      return iget(dp->dev, inum);
     }
-    brelse(bp);
   }
+
   return 0;
 }
 

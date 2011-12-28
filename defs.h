@@ -6,6 +6,7 @@ struct pipe;
 struct proc;
 struct spinlock;
 struct stat;
+struct superblock;
 
 // bio.c
 void            binit(void);
@@ -32,6 +33,7 @@ int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
 
 // fs.c
+void            readsb(int dev, struct superblock *sb);
 int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
 struct inode*   ialloc(uint, short);
@@ -62,9 +64,11 @@ void            ioapicinit(void);
 #endif
 
 // kalloc.c
+char*           enter_alloc(void);
 char*           kalloc(void);
 void            kfree(char*);
 void            kinit(void);
+uint            detect_memory(void);
 
 #if 0
 // kbd.c
@@ -77,6 +81,12 @@ void            lapiceoi(void);
 void            lapicinit(int);
 void            lapicstartap(uchar, uint);
 void            microdelay(int);
+
+// log.c
+void            initlog(void);
+void            log_write(struct buf*);
+void            begin_trans();
+void            commit_trans();
 
 // mp.c
 extern int      ismp;
@@ -178,7 +188,7 @@ int             putc(int c);
 void            seginit(void);
 void            kvmalloc(void);
 void            vmenable(void);
-pde_t*          setupkvm(void);
+pde_t*          setupkvm(char* (*alloc)());
 char*           uva2ka(pde_t*, char*);
 int             allocuvm(pde_t*, uint, uint);
 int             deallocuvm(pde_t*, uint, uint);
@@ -192,6 +202,7 @@ int             copyout(pde_t*, uint, void*, uint);
 void            tlb_register(char *va);
 void            do_tlb_miss();
 void            do_tlb_violation();
+//void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

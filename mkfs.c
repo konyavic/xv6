@@ -11,8 +11,10 @@
 
 #define stat xv6_stat
 #include "stat.h"
+#include "param.h"
 
-int nblocks = 995;
+int nblocks = 985;
+int nlog = LOGSIZE;
 int ninodes = 200;
 int size = 1024;
 
@@ -81,17 +83,18 @@ main(int argc, char *argv[])
   sb.size = xint(size);
   sb.nblocks = xint(nblocks); // so whole disk is size sectors
   sb.ninodes = xint(ninodes);
+  sb.nlog = xint(nlog);
 
   bitblocks = size/(512*8) + 1;
   usedblocks = ninodes / IPB + 3 + bitblocks;
   freeblock = usedblocks;
 
-  printf("used %d (bit %d ninode %zu) free %u total %d\n", usedblocks,
-         bitblocks, ninodes/IPB + 1, freeblock, nblocks+usedblocks);
+  printf("used %d (bit %d ninode %zu) free %u log %u total %d\n", usedblocks,
+         bitblocks, ninodes/IPB + 1, freeblock, nlog, nblocks+usedblocks+nlog);
 
-  assert(nblocks + usedblocks == size);
+  assert(nblocks + usedblocks + nlog == size);
 
-  for(i = 0; i < nblocks + usedblocks; i++)
+  for(i = 0; i < nblocks + usedblocks + nlog; i++)
     wsect(i, zeroes);
 
   memset(buf, 0, sizeof(buf));

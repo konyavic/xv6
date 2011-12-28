@@ -1,5 +1,6 @@
 #include "types.h"
 #include "param.h"
+//#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "defs.h"
@@ -39,7 +40,7 @@ exec(char *path, char **argv)
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
-  if((pgdir = setupkvm()) == 0)
+  if((pgdir = setupkvm(kalloc)) == 0)
     goto bad;
 
 #ifdef DEBUG
@@ -54,9 +55,9 @@ exec(char *path, char **argv)
       continue;
     if(ph.memsz < ph.filesz)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, ph.va + ph.memsz)) == 0)
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
-    if(loaduvm(pgdir, (char*)ph.va, ip, ph.offset, ph.filesz) < 0)
+    if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
   iunlockput(ip);
@@ -65,22 +66,23 @@ exec(char *path, char **argv)
   cprintf("%s: end of loading\n", __func__);
 #endif
 
-  // Allocate a one-page stack at the next page boundary
+  // Allocate two pages at the next page boundary.
+  // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + PGSIZE)) == 0)
+  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
+  //clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+  sp = sz;
 #ifdef DEBUGxxx
   cprintf("%s: allocated user stack\n", __func__);
   dump_pgd(pgdir, 2);
 #endif
 
   // Push argument strings, prepare rest of stack in ustack.
-  sp = sz;
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
       goto bad;
-    sp -= strlen(argv[argc]) + 1;
-    sp &= ~3;
+    sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
     if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
       goto bad;
     ustack[argc] = sp;
@@ -136,6 +138,7 @@ exec(char *path, char **argv)
 #ifdef DEBUG
   cprintf("%s: finish\n", __func__);
 #endif
+
   return 0;
 
  bad:

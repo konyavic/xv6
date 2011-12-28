@@ -8,6 +8,7 @@
 #include "types.h"
 #include "elf.h"
 #include "x86.h"
+#include "memlayout.h"
 
 #define SECTSIZE  512
 
@@ -19,7 +20,7 @@ bootmain(void)
   struct elfhdr *elf;
   struct proghdr *ph, *eph;
   void (*entry)(void);
-  uchar* va;
+  uchar* pa;
 
   elf = (struct elfhdr*)0x10000;  // scratch space
 
@@ -34,10 +35,10 @@ bootmain(void)
   ph = (struct proghdr*)((uchar*)elf + elf->phoff);
   eph = ph + elf->phnum;
   for(; ph < eph; ph++){
-    va = (uchar*)ph->va;
-    readseg(va, ph->filesz, ph->offset);
+    pa = (uchar*)ph->paddr;
+    readseg(pa, ph->filesz, ph->off);
     if(ph->memsz > ph->filesz)
-      stosb(va + ph->filesz, 0, ph->memsz - ph->filesz);
+      stosb(pa + ph->filesz, 0, ph->memsz - ph->filesz);
   }
 
   // Call the entry point from the ELF header.
@@ -72,17 +73,17 @@ readsect(void *dst, uint offset)
   insl(0x1F0, dst, SECTSIZE/4);
 }
 
-// Read 'count' bytes at 'offset' from kernel into virtual address 'va'.
+// Read 'count' bytes at 'offset' from kernel into physical address 'pa'.
 // Might copy more than asked.
 void
-readseg(uchar* va, uint count, uint offset)
+readseg(uchar* pa, uint count, uint offset)
 {
-  uchar* eva;
+  uchar* epa;
 
-  eva = va + count;
+  epa = pa + count;
 
   // Round down to sector boundary.
-  va -= offset % SECTSIZE;
+  pa -= offset % SECTSIZE;
 
   // Translate from bytes to sectors; kernel starts at sector 1.
   offset = (offset / SECTSIZE) + 1;
@@ -90,6 +91,6 @@ readseg(uchar* va, uint count, uint offset)
   // If this is too slow, we could read lots of sectors at a time.
   // We'd write more to memory than asked, but it doesn't matter --
   // we load in increasing order.
-  for(; va < eva; va += SECTSIZE, offset++)
-    readsect(va, offset);
+  for(; pa < epa; pa += SECTSIZE, offset++)
+    readsect(pa, offset);
 }

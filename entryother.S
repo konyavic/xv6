@@ -1,5 +1,7 @@
 #include "asm.h"
-
+#include "memlayout.h"
+#include "mmu.h"
+	
 # Each non-boot CPU ("AP") is started up in response to a STARTUP
 # IPI from the boot CPU.  Section B.4.2 of the Multi-Processor
 # Specification says that the AP will start in real mode with CS:IP
@@ -9,20 +11,15 @@
 # Because this code sets DS to zero, it must sit
 # at an address in the low 2^16 bytes.
 #
-# Bootothers (in main.c) sends the STARTUPs one at a time.
-# It copies this code (start) at 0x7000.
-# It puts the address of a newly allocated per-core stack in start-4,
-# and the address of the place to jump to (mpmain) in start-8.
+# Startothers (in main.c) sends the STARTUPs one at a time.
+# It copies this code (start) at 0x7000.  It puts the address of
+# a newly allocated per-core stack in start-4,the address of the
+# place to jump to (mpenter) in start-8, and the physical address
+# of entrypgdir in start-12.
 #
 # This code is identical to bootasm.S except:
 #   - it does not need to enable A20
-#   - it uses the address at start-4 for the %esp
-#   - it jumps to the address at start-8 instead of calling bootmain
-
-#define SEG_KCODE 1
-#define SEG_KDATA 2
-
-#define CR0_PE    1
+#   - it uses the address at start-4, start-8, and start-12
 
 .code16           
 .globl start
@@ -40,7 +37,7 @@ start:
   movl    %eax, %cr0
 
 //PAGEBREAK!
-  ljmp    $(SEG_KCODE<<3), $start32
+  ljmpl    $(SEG_KCODE<<3), $(start32)
 
 .code32
 start32:
@@ -52,11 +49,22 @@ start32:
   movw    %ax, %fs
   movw    %ax, %gs
 
-  # switch to the stack allocated by bootothers()
-  movl    start-4, %esp
+  # Turn on page size extension for 4Mbyte pages
+  movl    %cr4, %eax
+  orl     $(CR4_PSE), %eax
+  movl    %eax, %cr4
+  # Use enterpgdir as our initial page table
+  movl    (start-12), %eax
+  movl    %eax, %cr3
+  # Turn on paging.
+  movl    %cr0, %eax
+  orl     $(CR0_PE|CR0_PG|CR0_WP), %eax
+  movl    %eax, %cr0
 
-  # call mpmain()
-  call	*(start-8)
+  # Switch to the stack allocated by startothers()
+  movl    (start-4), %esp
+  # Call mpenter()
+  call	 *(start-8)
 
   movw    $0x8a00, %ax
   movw    %ax, %dx
@@ -69,9 +77,11 @@ spin:
 .p2align 2
 gdt:
   SEG_NULLASM
-  SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)
-  SEG_ASM(STA_W, 0x0, 0xffffffff)
+  SEG_ASM(STA_X|STA_R, 0, 0xffffffff)
+  SEG_ASM(STA_W, 0, 0xffffffff)
+
 
 gdtdesc:
   .word   (gdtdesc - gdt - 1)
   .long   gdt
+

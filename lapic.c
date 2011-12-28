@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "defs.h"
+#include "memlayout.h"
 #include "traps.h"
 #include "mmu.h"
 #include "x86.h"
@@ -46,12 +47,11 @@ lapicw(int index, int value)
   lapic[index] = value;
   lapic[ID];  // wait for write to finish, by reading
 }
-
 //PAGEBREAK!
+
 void
 lapicinit(int c)
 {
-  cprintf("lapicinit: %d 0x%x\n", c, lapic);
   if(!lapic) 
     return;
 
@@ -132,7 +132,7 @@ microdelay(int us)
 
 #define IO_RTC  0x70
 
-// Start additional processor running bootstrap code at addr.
+// Start additional processor running entry code at addr.
 // See Appendix B of MultiProcessor Specification.
 void
 lapicstartap(uchar apicid, uint addr)
@@ -145,7 +145,7 @@ lapicstartap(uchar apicid, uint addr)
   // the AP startup code prior to the [universal startup algorithm]."
   outb(IO_RTC, 0xF);  // offset 0xF is shutdown code
   outb(IO_RTC+1, 0x0A);
-  wrv = (ushort*)(0x40<<4 | 0x67);  // Warm reset vector
+  wrv = (ushort*)P2V((0x40<<4 | 0x67));  // Warm reset vector
   wrv[0] = 0;
   wrv[1] = addr >> 4;
 
@@ -157,7 +157,7 @@ lapicstartap(uchar apicid, uint addr)
   lapicw(ICRLO, INIT | LEVEL);
   microdelay(100);    // should be 10ms, but too slow in Bochs!
   
-  // Send startup IPI (twice!) to enter bootstrap code.
+  // Send startup IPI (twice!) to enter code.
   // Regular hardware is supposed to only accept a STARTUP
   // when it is in the halted state due to an INIT.  So the second
   // should be ignored, but it is part of the official Intel algorithm.
@@ -168,3 +168,5 @@ lapicstartap(uchar apicid, uint addr)
     microdelay(200);
   }
 }
+
+
