@@ -35,12 +35,16 @@ strlen(char *s)
 void*
 memset(void *dst, int c, uint n)
 {
+#if 0
+  stosb(dst, c, n);
+#else
   char *s1;
   s1=dst;
   while(n-- > 0){
         *s1= c;
          s1++;
   }  
+#endif
   return dst;
 }
 

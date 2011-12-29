@@ -1,7 +1,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-//#include "memlayout.h"
+#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "sh4.h"
@@ -42,7 +42,7 @@ fetchstr(struct proc *p, uint addr, char **pp)
 }
 
 // Fetch the nth 32-bit system call argument.
-// SH4A:
+// SH4 and SH4A:
 // According to GCC calling convention, the first four 
 // arguments are stored to register r4 to r7, respectively.
 int
@@ -157,6 +157,7 @@ void
 syscall(void)
 {
   int num;
+
 #if 0
   num = proc->tf->eax;
   if(num >= 0 && num < SYS_open && syscalls[num]) {

@@ -1,7 +1,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-//#include "memlayout.h"
+#include "memlayout.h"
 #include "mmu.h"
 #include "sh4.h"
 #include "proc.h"
@@ -83,6 +83,7 @@ found:
   p->context->r15 = (uint) p->tf;
   p->context->r14 = (uint) p->kstack + KSTACKSIZE;
 #endif
+
   return p;
 }
 

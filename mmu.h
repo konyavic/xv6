@@ -42,7 +42,7 @@
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
-// for SH-4A
+// for SH4 and SH4A
 // PTEH
 // +-----------+--+----------+
 // | VPN 31:10 |xx| ASID 7:0 |

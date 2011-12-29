@@ -154,8 +154,11 @@ int             fetchstr(struct proc*, uint, char**);
 void            syscall(void);
 
 // timer.c
-//void            timerinit(void);
+#if 0
+void            timerinit(void);
+#else
 void            timer_init(void);
+#endif
 
 #if 0
 // trap.c
@@ -199,10 +202,12 @@ pde_t*          copyuvm(pde_t*, uint);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
+#if 0
+void            clearpteu(pde_t *pgdir, char *uva);
+#endif
 void            tlb_register(char *va);
 void            do_tlb_miss();
 void            do_tlb_violation();
-//void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

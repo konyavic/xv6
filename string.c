@@ -4,12 +4,20 @@
 void*
 memset(void *dst, int c, uint n)
 {
+#if 0
+  if ((int)dst%4 == 0 && n%4 == 0){
+    c &= 0xFF;
+    stosl(dst, (c<<24)|(c<<16)|(c<<8)|c, n/4);
+  } else
+    stosb(dst, c, n);
+#else
   char *s1;
   s1=dst;
   while(n-- > 0){
         *s1= c;
          s1++;
   }  
+#endif
   return dst;
 }
 

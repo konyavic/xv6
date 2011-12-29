@@ -7,11 +7,9 @@
 #define NINODE       50  // maximum number of active i-nodes
 #define NDEV         10  // maximum major device number
 #define ROOTDEV       1  // device number of file system root disk
-#define USERTOP  0x80000000 // end of user address space
 #define MAXARG       32  // max exec arguments
+#define LOGSIZE      10  // max data sectors in on-disk log
 
 #define STACK_SIZE  0x1000
-
 #define TINTLVL        0xd
 #define TIMER_RATE	(12500000UL)  /* use PCK/4 edge.  12.5Mhz 1tick = 0.08us */
-#define LOGSIZE      10  // max data sectors in on-disk log

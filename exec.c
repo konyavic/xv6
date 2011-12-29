@@ -1,6 +1,6 @@
 #include "types.h"
 #include "param.h"
-//#include "memlayout.h"
+#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "defs.h"
@@ -71,7 +71,9 @@ exec(char *path, char **argv)
   sz = PGROUNDUP(sz);
   if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
-  //clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+#if 0
+  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
+#endif
   sp = sz;
 #ifdef DEBUGxxx
   cprintf("%s: allocated user stack\n", __func__);

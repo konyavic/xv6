@@ -9,7 +9,7 @@
 #include "spinlock.h"
 #include "fs.h"
 #include "file.h"
-//#include "memlayout.h"
+#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "sh4.h"
@@ -170,11 +170,18 @@ consputc(int c)
       ;
   }
 
+#if 0
+  if(c == BACKSPACE){
+    uartputc('\b'); uartputc(' '); uartputc('\b');
+  } else
+    uartputc(c);
+  cgaputc(c);
+#else
   if(c == BACKSPACE){
     putc('\b'); putc(' '); putc('\b');
   } else
     putc(c);
-  //cgaputc(c);
+#endif
 }
 
 #define INPUT_BUF 128
@@ -291,7 +298,9 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
 
-  //picenable(IRQ_KBD);
-  //ioapicenable(IRQ_KBD, 0);
+#if 0
+  picenable(IRQ_KBD);
+  ioapicenable(IRQ_KBD, 0);
+#endif
 }
 

@@ -4,7 +4,7 @@
 #include "defs.h"
 #include "param.h"
 #include "sh4.h"
-//#include "memlayout.h"
+#include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "spinlock.h"
@@ -31,9 +31,16 @@ acquire(struct spinlock *lk)
   // The xchg is atomic.
   // It also serializes, so that reads after acquire are not
   // reordered before it. 
+#if 0
+  while(xchg(&lk->locked, 1) != 0)
+    ;
+#else
+  // TODO: smp
   while(lk->locked != 0)
     ;
   lk->locked = 1;
+#endif
+
   // Record info about lock acquisition for debugging.
   lk->cpu = cpu;
   getcallerpcs(&lk, lk->pcs);
@@ -58,7 +65,12 @@ release(struct spinlock *lk)
   // after a store. So lock->locked = 0 would work here.
   // The xchg being asm volatile ensures gcc emits it after
   // the above assignments (and after the critical section).
+#if 0
+  xchg(&lk->locked, 0);
+#else
+  // TODO: smp
   lk->locked = 0;
+#endif
 
   popcli();
 }
@@ -99,22 +111,40 @@ holding(struct spinlock *lock)
 void
 pushcli(void)
 {
+#if 0
+  int eflags;
+  
+  eflags = readeflags();
+  cli();
+  if(cpu->ncli++ == 0)
+    cpu->intena = eflags & FL_IF;
+#else
   int sr;
   
   sr = read_sr();
   cli();
   if(cpu->ncli++ == 0)
     cpu->intena = sr & SR_BL_MASK;
+#endif
 }
 
 void
 popcli(void)
 {
+#if 0
+  if(readeflags()&FL_IF)
+    panic("popcli - interruptible");
+  if(--cpu->ncli < 0)
+    panic("popcli");
+  if(cpu->ncli == 0 && cpu->intena)
+    sti();
+#else
   if(!(read_sr() & SR_BL_MASK))
     panic("popcli - interruptible");
   if(--cpu->ncli < 0)
     panic("popcli");
   if(cpu->ncli == 0 && !cpu->intena)
     sti();
+#endif
 }
 
