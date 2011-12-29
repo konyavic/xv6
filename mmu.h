@@ -25,11 +25,6 @@
 // construct virtual address from indexes and offset
 #define PGADDR(d, t, o) ((uint)((d) << PDXSHIFT | (t) << PTXSHIFT | (o)))
 
-// turn a kernel linear address into a physical address.
-// all of the kernel data structures have linear and
-// physical addresses that are equal.
-#define PADDR(a)       ((uint)(a))
-
 // Page directory and page table constants.
 #define NPDENTRIES      1024    // # directory entries per page directory
 #define NPTENTRIES      1024    // # PTEs per page table
@@ -71,8 +66,12 @@
 #define PTEL_DEFAULT    ( PTEL_WT | PTEL_SZ0 | PTEL_RW | PTEL_USER | PTEL_V | PTEL_DIRTY )
 // XXX: why causing miltiple hit without dirty?
 
-#define PTE_ADDR(pte)	((uint) (pte) & ~0xFFF)
-#define PTE_PERM(pte)	((uint) (pte) & 0x1FF)
+// Address in page table or page directory entry
+#define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
+#define PTE_PERM(pte)	((uint)(pte) & 0x1FF)
+
+#ifndef __ASSEMBLER__
+typedef uint pte_t;
 
 inline static void enable_mmu()
 {
@@ -158,4 +157,4 @@ inline static void set_ttb(uint val)
   return;
 }
 
-typedef uint pte_t;
+#endif

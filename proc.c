@@ -15,7 +15,6 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
-extern struct trapframe *ktf;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -349,8 +348,13 @@ sched(void)
     panic("sched locks");
   if(proc->state == RUNNING)
     panic("sched running");
+#if 0
+  if(readeflags()&FL_IF)
+    panic("sched interruptible");
+#else
   if(!(read_sr() & SR_BL_MASK))
     panic("sched interruptible");
+#endif
   intena = cpu->intena;
 #ifdef DEBUG
   cprintf("%s: before swtch\n", __func__);

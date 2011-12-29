@@ -7,6 +7,11 @@
 #include "proc.h"
 #include "elf.h"
 
+#if 0
+extern char data[];  // defined by kernel.ld
+pde_t *kpgdir;  // for use in scheduler()
+struct segdesc gdt[NSEGS];
+#endif
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -54,7 +59,7 @@ walkpgdir(pde_t *pgdir, const void *va, char* (*alloc)(void))
 
   pde = &pgdir[PDX(va)];
   if(*pde & PTEL_V){
-    pgtab = (pte_t*)PTE_ADDR(*pde);
+    pgtab = (pte_t*)p2v(PTE_ADDR(*pde));
   } else {
     if(!alloc || (pgtab = (pte_t*)alloc()) == 0)
       return 0;
@@ -63,7 +68,7 @@ walkpgdir(pde_t *pgdir, const void *va, char* (*alloc)(void))
     // The permissions here are overly generous, but they can
     // be further restricted by the permissions in the page table 
     // entries, if necessary.
-    *pde = PADDR(pgtab) | PTEL_DEFAULT;
+    *pde = v2p(pgtab) | PTEL_DEFAULT;
   }
   return &pgtab[PTX(va)];
 }
@@ -142,7 +147,8 @@ setupkvm(char* (*alloc)(void))
 #endif
   memset(pgdir, 0, PGSIZE);
 #if 0
-  k = kmap;
+  if (p2v(PHYSTOP) > (void*)DEVSPACE)
+    panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start, 
                 (uint)k->phys_start, k->perm, alloc) < 0)
@@ -239,7 +245,7 @@ inituvm(pde_t *pgdir, char *init, uint sz)
   cprintf("%s: mem=0x%x\n", __func__, mem);
 #endif
   memset(mem, 0, PGSIZE);
-  mappages(pgdir, 0, PGSIZE, PADDR(mem), PTEL_DEFAULT, kalloc);
+  mappages(pgdir, 0, PGSIZE, v2p(mem), PTEL_DEFAULT, kalloc);
   memmove(mem, init, sz);
 }
 
@@ -261,7 +267,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
       n = sz - i;
     else
       n = PGSIZE;
-    if(readi(ip, (char*)pa, offset+i, n) != n)
+    if(readi(ip, p2v(pa), offset+i, n) != n)
       return -1;
   }
   return 0;
@@ -289,7 +295,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
     memset(mem, 0, PGSIZE);
-    mappages(pgdir, (char*)a, PGSIZE, PADDR(mem), PTEL_DEFAULT, kalloc);
+    mappages(pgdir, (char*)a, PGSIZE, v2p(mem), PTEL_DEFAULT, kalloc);
   }
   return newsz;
 }
@@ -310,11 +316,14 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   a = PGROUNDUP(newsz);
   for(; a  < oldsz; a += PGSIZE){
     pte = walkpgdir(pgdir, (char*)a, 0);
-    if(pte && (*pte & PTEL_V) != 0){
+    if(!pte)
+      a += (NPTENTRIES - 1) * PGSIZE;
+    else if((*pte & PTEL_V) != 0){
       pa = PTE_ADDR(*pte);
       if(pa == 0)
         panic("kfree");
-      kfree((char*)pa);
+      char *v = p2v(pa);
+      kfree(v);
       *pte = 0;
     }
   }
@@ -339,7 +348,8 @@ freevm(pde_t *pgdir)
 #ifdef DEBUG
       cprintf("%s: free page addr=0x%x\n", __func__, PTE_ADDR(pgdir[i]));
 #endif
-      kfree((char*)PTE_ADDR(pgdir[i]));
+      char * v = p2v(PTE_ADDR(pgdir[i]));
+      kfree(v);
     }
   }
 #ifdef DEBUG
@@ -369,8 +379,8 @@ copyuvm(pde_t *pgdir, uint sz)
     pa = PTE_ADDR(*pte);
     if((mem = kalloc()) == 0)
       goto bad;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, PADDR(mem), PTEL_DEFAULT, kalloc) < 0)
+    memmove(mem, (char*)p2v(pa), PGSIZE);
+    if(mappages(d, (void*)i, PGSIZE, v2p(mem), PTEL_DEFAULT, kalloc) < 0)
       goto bad;
   }
   return d;
@@ -390,7 +400,7 @@ uva2ka(pde_t *pgdir, char *uva)
   pte = walkpgdir(pgdir, uva, 0);
   if(pte == 0)
     return 0;
-  return (char*)PTE_ADDR(*pte);
+  return (char*)p2v(PTE_ADDR(*pte));
 }
 
 // Copy len bytes from p to user address va in page table pgdir.
