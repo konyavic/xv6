@@ -42,6 +42,29 @@ start:
   jmp     @r0
   nop
 
+.global smp_start
+smp_start:
+  /* initialize the cache */
+  mov.l   CCR_REG, r0
+  mov.l   CCR_INIT, r1
+  mov.l   r1, @r0
+
+  /* initialize status registers */
+  mov.l   SR_INIT, r1
+  ldc     r1, sr
+
+  /* initialize stack point */
+  mov.l   XV6_STACK, r0
+  mov     r0, r15
+
+  /* initialize vector base register */
+  mov.l   VBR_INIT, r0
+  ldc     r0, vbr
+
+  mov.l   XV6_SMP_MAIN, r0
+  jmp     @r0
+  nop
+
 .align 4
 CCR_REG:
   .long 0xff00001c
@@ -57,6 +80,8 @@ BSS_END:
   .long __bss_end
 XV6_MAIN:
   .long main
+XV6_SMP_MAIN:
+  .long mpenter
 XV6_STACK:
   .long xv6_stack+STACK_SIZE
 

@@ -158,7 +158,11 @@ mpinit(void)
   }
 #else
   bcpu = &cpus[0];
+#ifdef RP1
+  ncpu = 4;
+#else
   ncpu = 1;
+#endif
   ismp = 0;
 #endif
 }
