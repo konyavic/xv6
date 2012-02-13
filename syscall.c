@@ -72,7 +72,7 @@ argint(int n, int *ip)
     default:
       // Fetch from stack
       // XXX: NOT TESTSED
-      x = fetchint(proc, proc->tf->sgr + 4*n, ip);
+      x = fetchint(proc(), proc()->tf->sgr + 4*n, ip);
       return x;
   }
 #endif
@@ -88,7 +88,7 @@ argptr(int n, char **pp, int size)
   
   if(argint(n, &i) < 0)
     return -1;
-  if((uint)i >= proc->sz || (uint)i+size > proc->sz)
+  if((uint)i >= proc()->sz || (uint)i+size > proc()->sz)
     return -1;
   *pp = (char*)i;
   return 0;
@@ -104,7 +104,7 @@ argstr(int n, char **pp)
   int addr;
   if(argint(n, &addr) < 0)
     return -1;
-  return fetchstr(proc, addr, pp);
+  return fetchstr(proc(), addr, pp);
 }
 
 extern int sys_chdir(void);
@@ -180,7 +180,7 @@ syscall(void)
     ret = syscalls[num]();
   else {
     cprintf("%d %s: unknown sys call %d\n",
-            proc->pid, proc->name, num);
+            proc()->pid, proc()->name, num);
     ret = -1;
   }
   asm volatile("ldc %0, r0_bank" :: "r"(ret));

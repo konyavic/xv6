@@ -112,7 +112,7 @@ panic(char *s)
   
   cli();
   cons.locking = 0;
-  cprintf("cpu%d: panic: ", cpu->id);
+  cprintf("cpu%d: panic: ", cpu()->id);
   cprintf(s);
   cprintf("\n");
   getcallerpcs(&s, pcs);
@@ -246,7 +246,7 @@ consoleread(struct inode *ip, char *dst, int n)
   acquire(&input.lock);
   while(n > 0){
     while(input.r == input.w){
-      if(proc->killed){
+      if(proc()->killed){
         release(&input.lock);
         ilock(ip);
         return -1;

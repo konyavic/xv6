@@ -19,6 +19,24 @@ struct {
 } kmem;
 
 extern unsigned const char *__bss_end;
+static char *newend;
+
+// A simple page allocator to get off the ground during entry
+char *
+enter_alloc(void)
+{
+  if (newend == 0)
+    newend = &__bss_end;
+
+#if 0
+  if ((uint) newend >= KERNBASE + 0x400000)
+    panic("only first 4Mbyte are mapped during entry");
+#endif
+  void *p = (void*)PGROUNDUP((uint)newend);
+  memset(p, 0, PGSIZE);
+  newend = newend + PGSIZE;
+  return p;
+}
 
 // Initialize free list of physical pages.
 void
@@ -27,7 +45,9 @@ kinit(void)
   char *p;
 
   initlock(&kmem.lock, "kmem");
-  p = (char*)PGROUNDUP((uint)&__bss_end);
+  if (newend == 0)
+    newend = &__bss_end;
+  p = (char*)PGROUNDUP((uint)newend);
   for(; p + PGSIZE <= (char*)PHYSTOP; p += PGSIZE)
     kfree(p);
 }

@@ -7,6 +7,7 @@
 #include "sh4.h"
 
 unsigned char xv6_stack[STACK_SIZE];
+unsigned char *xv6_smp_stack;
 static void startothers(void);
 static void mpmain(void)  __attribute__((noreturn));
 
@@ -21,7 +22,7 @@ main(void)
   tvinit();        // trap vectors
   scif_init();     // serial port
   seginit();       // set up segments
-  cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
+  cprintf("\ncpu%d: starting xv6\n\n", cpu()->id);
   consoleinit();   // I/O devices & their interrupts
   pinit();         // process table
   binit();         // buffer cache
@@ -87,12 +88,23 @@ void slave_boot(unsigned int start_pc, int id)
   cprintf("CPU%d Wakeup!!\n",id);
 }
 
+void xv6_smp_reset() {
+  scif_putc('Q');
+  scif_putc('Q');
+  while(1);
+}
+
+extern unsigned int smp_reset;
 // Common CPU setup code.
 static void
 mpmain(void)
 {
-  cprintf("cpu%d: starting\n", cpu->id);
-  cpu->started = 1;
+#if 1
+  volatile unsigned int *resetvec = (RESETVEC_BASE + (0 << 12));
+  *resetvec = (unsigned int) smp_reset;
+#endif
+  cprintf("cpu%d: starting\n", cpu()->id);
+  cpu()->started = 1;
   scheduler();     // start running processes
 }
 
@@ -140,15 +152,15 @@ startothers(void)
 
     lapicstartap(c->id, v2p(code));
 #else
-
-#endif
+    stack = enter_alloc();
+    xv6_smp_stack = stack + KSTACKSIZE;
     c->id = c - cpus;
     slave_boot(smp_start, c->id);
-    while(1);
+#endif
 
     // wait for cpu to finish mpmain()
-    while(c->started == 0)
-      ;
+    //while(c->started == 0)
+    //  ;
   }
 }
 
