@@ -46,7 +46,10 @@ main(void)
 void
 mpenter(void)
 {
-  //cprintf("cpu%d: mpenter\n", cpu->id);
+  static uchar id = 1;
+  cpu = &cpus[id++];
+  cprintf("cpu%d: mpenter\n", cpu->id);
+  cpu->started = 1;
   while(1);
 #if 0
   switchkvm(); 
@@ -86,12 +89,6 @@ void slave_boot(unsigned int start_pc, int id)
   *stbcr = STBCR_AP_VAL;
 
   cprintf("CPU%d Wakeup!!\n",id);
-}
-
-void xv6_smp_reset() {
-  scif_putc('Q');
-  scif_putc('Q');
-  while(1);
 }
 
 // Common CPU setup code.
@@ -154,8 +151,8 @@ startothers(void)
 #endif
 
     // wait for cpu to finish mpmain()
-    //while(c->started == 0)
-    //  ;
+    while(c->started == 0)
+      ;
   }
 }
 
