@@ -127,16 +127,16 @@ growproc(int n)
 {
   uint sz;
   
-  sz = proc()->sz;
+  sz = proc->sz;
   if(n > 0){
-    if((sz = allocuvm(proc()->pgdir, sz, sz + n)) == 0)
+    if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
       return -1;
   } else if(n < 0){
-    if((sz = deallocuvm(proc()->pgdir, sz, sz + n)) == 0)
+    if((sz = deallocuvm(proc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
-  proc()->sz = sz;
-  switchuvm(proc());
+  proc->sz = sz;
+  switchuvm(proc);
   return 0;
 }
 
@@ -147,7 +147,7 @@ int
 fork(void)
 {
 #ifdef DEBUG
-  cprintf("%s: pid=%d\n", __func__, proc()->pid);
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
 #endif
   int i, pid;
   struct proc *np;
@@ -157,17 +157,17 @@ fork(void)
     return -1;
 
   // Copy process state from p.
-  if((np->pgdir = copyuvm(proc()->pgdir, proc()->sz)) == 0){
+  if((np->pgdir = copyuvm(proc->pgdir, proc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
-  np->sz = proc()->sz;
-  np->parent = proc();
-  *np->tf = *proc()->tf;
+  np->sz = proc->sz;
+  np->parent = proc;
+  *np->tf = *proc->tf;
 #ifdef DEBUG
-  cprintf("%s: proc()->kstack=0x%x\n", __func__, proc()->kstack);
+  cprintf("%s: proc->kstack=0x%x\n", __func__, proc->kstack);
   cprintf("%s: np->kstack=0x%x\n", __func__, np->kstack);
 #endif
 
@@ -177,13 +177,13 @@ fork(void)
 #endif
 
   for(i = 0; i < NOFILE; i++)
-    if(proc()->ofile[i])
-      np->ofile[i] = filedup(proc()->ofile[i]);
-  np->cwd = idup(proc()->cwd);
+    if(proc->ofile[i])
+      np->ofile[i] = filedup(proc->ofile[i]);
+  np->cwd = idup(proc->cwd);
  
   pid = np->pid;
   np->state = RUNNABLE;
-  safestrcpy(np->name, proc()->name, sizeof(proc()->name));
+  safestrcpy(np->name, proc->name, sizeof(proc->name));
   return pid;
 }
 
@@ -196,28 +196,28 @@ exit(void)
   struct proc *p;
   int fd;
 
-  if(proc() == initproc)
+  if(proc == initproc)
     panic("init exiting");
 
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
-    if(proc()->ofile[fd]){
-      fileclose(proc()->ofile[fd]);
-      proc()->ofile[fd] = 0;
+    if(proc->ofile[fd]){
+      fileclose(proc->ofile[fd]);
+      proc->ofile[fd] = 0;
     }
   }
 
-  iput(proc()->cwd);
-  proc()->cwd = 0;
+  iput(proc->cwd);
+  proc->cwd = 0;
 
   acquire(&ptable.lock);
 
   // Parent might be sleeping in wait().
-  wakeup1(proc()->parent);
+  wakeup1(proc->parent);
 
   // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->parent == proc()){
+    if(p->parent == proc){
       p->parent = initproc;
       if(p->state == ZOMBIE)
         wakeup1(initproc);
@@ -225,7 +225,7 @@ exit(void)
   }
 
   // Jump into the scheduler, never to return.
-  proc()->state = ZOMBIE;
+  proc->state = ZOMBIE;
   sched();
   panic("zombie exit");
 }
@@ -236,7 +236,7 @@ int
 wait(void)
 {
 #ifdef DEBUG
-  cprintf("%s: pid=%d\n", __func__, proc()->pid);
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
 #endif
   struct proc *p;
   int havekids, pid;
@@ -246,7 +246,7 @@ wait(void)
     // Scan through table looking for zombie children.
     havekids = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != proc())
+      if(p->parent != proc)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
@@ -266,7 +266,7 @@ wait(void)
     }
 
     // No point waiting if we don't have any children.
-    if(!havekids || proc()->killed){
+    if(!havekids || proc->killed){
       release(&ptable.lock);
       return -1;
     }
@@ -308,16 +308,16 @@ scheduler(void)
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      cpu()->proc = p;
+      proc = p;
       switchuvm(p);
       p->state = RUNNING;
 #ifdef DEBUG
       cprintf("%s: before swtch\n", __func__);
-      cprintf("%s: proc()->context=0x%x \n", __func__, proc()->context);
-      cprintf("%s: proc()->kstack=0x%x \n", __func__, proc()->kstack);
-      dump_context(proc()->context);
+      cprintf("%s: proc->context=0x%x \n", __func__, proc->context);
+      cprintf("%s: proc->kstack=0x%x \n", __func__, proc->kstack);
+      dump_context(proc->context);
 #endif
-      swtch(&cpu()->scheduler, proc()->context);
+      swtch(&cpu->scheduler, proc->context);
 #ifdef DEBUG
       cprintf("%s: after swtch\n", __func__);
 #endif
@@ -325,7 +325,7 @@ scheduler(void)
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
-      cpu()->proc = 0;
+      proc = 0;
     }
     release(&ptable.lock);
 
@@ -333,7 +333,7 @@ scheduler(void)
 }
 
 // Enter scheduler.  Must hold only ptable.lock
-// and have changed proc()->state.
+// and have changed proc->state.
 void
 sched(void)
 {
@@ -344,9 +344,9 @@ sched(void)
 
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
-  if(cpu()->ncli != 1)
+  if(cpu->ncli != 1)
     panic("sched locks");
-  if(proc()->state == RUNNING)
+  if(proc->state == RUNNING)
     panic("sched running");
 #if 0
   if(readeflags()&FL_IF)
@@ -355,15 +355,15 @@ sched(void)
   if(!(read_sr() & SR_BL_MASK))
     panic("sched interruptible");
 #endif
-  intena = cpu()->intena;
+  intena = cpu->intena;
 #ifdef DEBUG
   cprintf("%s: before swtch\n", __func__);
 #endif
-  swtch(&proc()->context, cpu()->scheduler);
+  swtch(&proc->context, cpu->scheduler);
 #ifdef DEBUG
   cprintf("%s: after swtch\n", __func__);
 #endif
-  cpu()->intena = intena;
+  cpu->intena = intena;
   return;
 }
 
@@ -372,7 +372,7 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
-  proc()->state = RUNNABLE;
+  proc->state = RUNNABLE;
   sched();
   release(&ptable.lock);
 }
@@ -383,10 +383,10 @@ void
 forkret(void)
 {
 #ifdef DEBUG
-  cprintf("%s: pid=%d\n", __func__, proc()->pid);
-  cprintf("%s: proc()->tf->spc=0x%x\n", __func__, proc()->tf->spc);
-  cprintf("%s: proc()->tf->sgr=0x%x\n", __func__, proc()->tf->sgr);
-  cprintf("%s: proc()->tf->ssr=0x%x\n", __func__, proc()->tf->ssr);
+  cprintf("%s: pid=%d\n", __func__, proc->pid);
+  cprintf("%s: proc->tf->spc=0x%x\n", __func__, proc->tf->spc);
+  cprintf("%s: proc->tf->sgr=0x%x\n", __func__, proc->tf->sgr);
+  cprintf("%s: proc->tf->ssr=0x%x\n", __func__, proc->tf->ssr);
 #endif
   static int first = 1;
   // Still holding ptable.lock from scheduler.
@@ -435,12 +435,12 @@ sleep(void *chan, struct spinlock *lk)
   }
 
   // Go to sleep.
-  proc()->chan = chan;
-  proc()->state = SLEEPING;
+  proc->chan = chan;
+  proc->state = SLEEPING;
   sched();
 
   // Tidy up.
-  proc()->chan = 0;
+  proc->chan = 0;
 
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
@@ -496,12 +496,6 @@ kill(int pid)
   }
   release(&ptable.lock);
   return -1;
-}
-
-struct proc *
-__proc(void)
-{
-  return proc();
 }
 
 //PAGEBREAK: 36

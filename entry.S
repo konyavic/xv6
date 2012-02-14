@@ -65,14 +65,6 @@ smp_start:
   jmp     @r0
   nop
 
-.global smp_reset
-smp_reset:
-  mov.l   XV6_STACK, r0
-  mov     r0, r15
-  mov.l   XV6_SMP_RESET, r0
-  jmp     @r0
-  nop
-
 .align 4
 CCR_REG:
   .long 0xff00001c
@@ -94,8 +86,6 @@ XV6_SMP_MAIN:
   .long mpenter
 XV6_SMP_STACK:
   .long xv6_smp_stack
-XV6_SMP_RESET:
-  .long xv6_smp_reset
 
 /****************************************************************
 *                                                              *
@@ -116,17 +106,13 @@ general_exception:
   /* current stack = r15 = proc->kstack + KSTACKSIZE */
   mov.l r2, @-r15
   mov.l r1, @-r15
-  mov.l r0, @-r15
   mov.l excp_proc, r1
-  jsr   @r1
-  nop
-  mov   r0, r1
+  mov.l @r1, r1
   mov.l @(8,r1), r1 ! XXX: better way to locate proc->kstack?
   mov.l excp_STACK_SIZE, r2
   add   r2, r1
   mov   r15, r2     ! r2 = old stack
   mov   r1, r15     ! r15 = new stack
-  mov.l @r2+, r0
   mov.l @r2+, r1
   mov.l @r2+, r2
 excp_no_change:
@@ -247,7 +233,7 @@ excp_SR_BL_ENABLE:
 excp_SR_BL_DISABLE:
   .long 0x10000000
 excp_proc:
-  .long __proc
+  .long proc
 excp_vectors:
   .long vectors
 excp_STACK_SIZE:
@@ -267,17 +253,13 @@ tlb_exception:
   mov.l tlb_tmp_stack, r15
   mov.l r2, @-r15
   mov.l r1, @-r15
-  mov.l r0, @-r15
   mov.l tlb_proc, r1
-  jsr   @r1
-  nop
-  mov   r0, r1
+  mov.l @r1, r1
   mov.l @(8,r1), r1 ! XXX: better way to locate proc->kstack?
   mov.l tlb_STACK_SIZE, r2
   add   r2, r1
   mov   r15, r2     ! r2 = old stack
   mov   r1, r15     ! r15 = new stack
-  mov.l @r2+, r0
   mov.l @r2+, r1
   mov.l @r2+, r2
   /* save trapframe */
@@ -369,7 +351,7 @@ tlb_debug_str:
 tlb_SR_MD:
   .long 0x40000000
 tlb_proc:
-  .long __proc
+  .long proc
 tlb_vectors:
   .long vectors
 tlb_STACK_SIZE:
@@ -397,17 +379,13 @@ intr_entry:
   /* current stack = r15 = proc->kstack + KSTACKSIZE */
   mov.l r2, @-r15
   mov.l r1, @-r15
-  mov.l r0, @-r15
   mov.l intr_proc, r1
-  jsr   @r1
-  nop
-  mov   r0, r1
+  mov.l @r1, r1
   mov.l @(8,r1), r1 ! XXX: better way to locate proc->kstack?
   mov.l intr_STACK_SIZE, r2
   add   r2, r1
   mov   r15, r2     ! r2 = old stack
   mov   r1, r15     ! r15 = new stack
-  mov.l @r2+, r0
   mov.l @r2+, r1
   mov.l @r2+, r2
 intr_no_change:
@@ -489,7 +467,7 @@ intr_debug_str:
 intr_SR_MD:
   .long 0x40000000
 intr_proc:
-  .long __proc
+  .long proc
 intr_vectors :
   .long vectors
 intr_STACK_SIZE:

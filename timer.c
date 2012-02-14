@@ -68,22 +68,22 @@ void do_timer(void)
 #elif defined(RP1)
   TMU.TCR2 &= ~TCR_UNF;
 #endif
-  if(cpu()->id == 0){
+  if(cpu->id == 0){
     acquire(&tickslock);
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
   }
-  if(proc() && proc()->killed)
+  if(proc && proc->killed)
     exit();
 
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
-  if(proc() && proc()->state == RUNNING)
+  if(proc && proc->state == RUNNING)
     yield();
 
   // Check if the process has been killed since we yielded
-  if(proc() && proc()->killed)
+  if(proc && proc->killed)
     exit();
 
   return;

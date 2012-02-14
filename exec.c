@@ -18,8 +18,8 @@ exec(char *path, char **argv)
   }
 #endif
 #ifdef DEBUGxxx
-  cprintf("%s: oldpgdir=0x%x\n", __func__, proc()->pgdir);
-  dump_pde(proc()->pgdir, 0, 2);
+  cprintf("%s: oldpgdir=0x%x\n", __func__, proc->pgdir);
+  dump_pde(proc->pgdir, 0, 2);
 #endif
   char *s, *last;
   int i, off;
@@ -114,24 +114,24 @@ exec(char *path, char **argv)
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
-  safestrcpy(proc()->name, last, sizeof(proc()->name));
+  safestrcpy(proc->name, last, sizeof(proc->name));
 
   // Commit to the user image.
-  oldpgdir = proc()->pgdir;
-  proc()->pgdir = pgdir;
-  proc()->sz = sz;
+  oldpgdir = proc->pgdir;
+  proc->pgdir = pgdir;
+  proc->sz = sz;
 #if 0
-  proc()->tf->eip = elf.entry;  // main
-  proc()->tf->esp = sp;
-  switchuvm(proc());
+  proc->tf->eip = elf.entry;  // main
+  proc->tf->esp = sp;
+  switchuvm(proc);
 #else
-  proc()->tf->spc = elf.entry;
-  proc()->tf->sgr = sp;
+  proc->tf->spc = elf.entry;
+  proc->tf->sgr = sp;
 #ifdef DEBUG
   cprintf("%s: spc=0x%x, sgr=0x%x\n", 
-      __func__, proc()->tf->spc, proc()->tf->sgr);
+      __func__, proc->tf->spc, proc->tf->sgr);
 #endif
-  switchuvm(proc());
+  switchuvm(proc);
 #endif
 
 

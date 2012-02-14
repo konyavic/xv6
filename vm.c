@@ -43,8 +43,8 @@ seginit(void)
 # else
   // MP is not supported
   // SH4 has no segment
-  //cpu = &cpus[0];
-  cpu()->proc = 0;
+  cpu = &cpus[0];
+  proc = 0;
 #endif
 }
 
@@ -215,7 +215,7 @@ switchuvm(struct proc *p)
   int i;
   for (
       va = 0, i = 0; 
-      ((pte = (pde_t *) walkpgdir(proc()->pgdir, va, 0)) != 0) && *pte != 0
+      ((pte = (pde_t *) walkpgdir(proc->pgdir, va, 0)) != 0) && *pte != 0
       ; va += PGSIZE, i = (i+1)%64
       ) {
     set_urc(i);
@@ -431,7 +431,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 
 void tlb_register(char *va) 
 {
-  pde_t *pte = walkpgdir(proc()->pgdir, va, 0);
+  pde_t *pte = walkpgdir(proc->pgdir, va, 0);
   uint pa = PTE_ADDR(*pte);
   uint perm = PTE_PERM(*pte);
   set_pteh(PTE_ADDR(va));
@@ -455,14 +455,8 @@ void do_tlb_miss()
 
 void do_tlb_violation()
 {
-  cprintf("pid %d %s: access violation -- killed\n", proc()->pid, proc()->name);
-  unsigned int spc;
-  __asm__ __volatile__ (
-          "stc spc, %0" 
-          : "=r"(spc) );
-  cprintf("spc=%x\n", spc);
-  dump_context(proc()->context);
-  proc()->killed = 1;
+  cprintf("pid %d %s: access violation -- killed\n", proc->pid, proc->name);
+  proc->killed = 1;
   exit();
 }
 

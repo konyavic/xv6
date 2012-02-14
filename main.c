@@ -22,7 +22,7 @@ main(void)
   tvinit();        // trap vectors
   scif_init();     // serial port
   seginit();       // set up segments
-  cprintf("\ncpu%d: starting xv6\n\n", cpu()->id);
+  cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
   consoleinit();   // I/O devices & their interrupts
   pinit();         // process table
   binit();         // buffer cache
@@ -94,17 +94,12 @@ void xv6_smp_reset() {
   while(1);
 }
 
-extern unsigned int smp_reset;
 // Common CPU setup code.
 static void
 mpmain(void)
 {
-#if 1
-  volatile unsigned int *resetvec = (RESETVEC_BASE + (0 << 12));
-  *resetvec = (unsigned int) smp_reset;
-#endif
-  cprintf("cpu%d: starting\n", cpu()->id);
-  cpu()->started = 1;
+  cprintf("cpu%d: starting\n", cpu->id);
+  cpu->started = 1;
   scheduler();     // start running processes
 }
 

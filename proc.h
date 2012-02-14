@@ -35,20 +35,9 @@ extern int ncpu;
 extern struct cpu *cpu asm("%gs:0");       // &cpus[cpunum()]
 extern struct proc *proc asm("%gs:4");     // cpus[cpunum()].proc
 #else
+struct cpu *cpu;       // This cpu.
+struct proc *proc;     // Current proc on this cpu.
 #define CPUID   0xff000048
-inline static struct cpu *cpu() {
-#ifdef RP1
-    return &cpus[*(unsigned int*)CPUID];
-#else
-    return &cpus[0];
-#endif
-}
-
-inline static struct proc *proc() {
-    return cpu()->proc;
-}
-
-struct proc *__proc(void);
 #endif
 
 //PAGEBREAK: 17
