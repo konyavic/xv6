@@ -220,3 +220,4 @@ void            dump_pgd(pde_t *, int);
 void            dump_mem(char *, int, int);
 void            dump_proc(struct proc *);
 void            dump_context(struct context *);
+void            dump_utlb();

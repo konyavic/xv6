@@ -57,13 +57,13 @@ void slave_boot(unsigned int start_pc, int id)
 
   /* Set RESETVEC to start from entry point of slave */
   *resetvec = start_pc;
-  cprintf("RESETVEC%d on %x\n", id, resetvec);
-  cprintf("Setting RESETVEC%d to %x\n", id, start_pc);
+  //cprintf("RESETVEC%d on %x\n", id, resetvec);
+  //cprintf("Setting RESETVEC%d to %x\n", id, start_pc);
   while( *resetvec != start_pc);
-  cprintf("Succeeded to set RESETVEC%d to specified value\n", id);
+  //cprintf("Succeeded to set RESETVEC%d to specified value\n", id);
 
   /* Send reset and boot CPU from RESETVEC */
-  cprintf("Sending reset to CPU%d\n", id);
+  //cprintf("Sending reset to CPU%d\n", id);
 
   if (!(*stbcr & STBCR_MSTP))
     *stbcr |= STBCR_MSTP;
@@ -78,9 +78,20 @@ void slave_boot(unsigned int start_pc, int id)
 void
 mpenter(void)
 {
+#if 0
+  /* 
+   * Manually enable MCP 
+   * XXX: should do it in P2?
+   */
+  volatile unsigned int *ccr = 0xff00001c;
+  *ccr &= ~(0x10000); // enable CCD
+  *ccr |= (0x20000);  // enable MCP
+  *ccr |= 0x808;      // invalidate
+#endif
   switchkvm(); 
   seginit();
   //lapicinit(cpunum()); //XXX init timer
+  slave_tvinit();
   mpmain();
 }
 
@@ -89,11 +100,7 @@ static void
 mpmain(void)
 {
   cprintf("cpu%d: starting\n", cpu->id);
-  //slave_tvinit();
   cpu->started = 1;
-  if (cpu->id != 0)
-      while(1);
-  cprintf("cpu%d: vectors=0x%x\n", cpunum(), vectors);
   scheduler();     // start running processes
 }
 

@@ -94,6 +94,13 @@ inline static void clear_tlb()
   return;
 }
 
+inline static void clear_cache()
+{
+  volatile unsigned int *ccr = 0xff00001c;
+  *ccr |= 0x808;      // invalidate
+  return;
+}
+
 inline static void set_urb(uint val)
 {
   uint * mmucr = (uint *)MMUCR;

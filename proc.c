@@ -307,7 +307,7 @@ scheduler(void)
       if(p->state != RUNNABLE)
         continue;
 #ifdef DEBUG
-      cprintf("%s: found pid=%d\n", __func__, p->pid);
+      cprintf("%s: cpu%d found pid=%d\n", __func__, cpunum(), p->pid);
 #endif
 
       // Switch to chosen process.  It is the process's job
@@ -324,7 +324,7 @@ scheduler(void)
 #endif
       swtch(&cpu->scheduler, proc->context);
 #ifdef DEBUG
-      cprintf("%s: after swtch\n", __func__);
+      cprintf("%s: cpu%d after swtch\n", __func__, cpunum());
 #endif
       switchkvm();
 

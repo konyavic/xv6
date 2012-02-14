@@ -204,11 +204,12 @@ switchuvm(struct proc *p)
   if(p->pgdir == 0)
     panic("switchuvm: no pgdir\n");
 
-  //disable_mmu();
+  disable_mmu();
   clear_tlb();
 
   // load TLB for current process
   // XXX: should be done in TLB miss
+  clear_cache();
   char *va;
   pde_t *pte;
   int i;
@@ -220,8 +221,9 @@ switchuvm(struct proc *p)
     set_urc(i);
     tlb_register(va);
   }
+  clear_cache();
   
-  //enable_mmu();
+  enable_mmu();
   popcli();
 #endif
 
@@ -454,7 +456,7 @@ void do_tlb_miss()
 
 void do_tlb_violation()
 {
-  cprintf("pid %d %s: access violation -- killed\n", proc->pid, proc->name);
+  cprintf("cpu%d: pid %d %s: access violation -- killed\n", cpunum(), proc->pid, proc->name);
   proc->killed = 1;
   exit();
 }
@@ -589,4 +591,57 @@ void dump_mem(char *addr, int size, int level)
         );
   }
   cprintf("%s--- %s end ---\n", head, __func__);
+}
+
+static inline unsigned int get_val_in_P2(unsigned int addr)
+{
+  unsigned int __tempval,__rteval;
+  __asm__ __volatile__(
+      "mov.l  1f, %0\n\t"
+      "or     %2, %0\n\t"
+      "jmp    @%0\n\t"
+      "nop\n\t"
+      ".align 2\n"
+      "1:     .long 2f\n"
+      "2:\n\t"
+
+      "mov.l  3f, %0\n\t"
+      "synco\n\t"
+      "icbi   @%0\n\t"
+
+      "mov.l  @%3,%1\n\t"
+      "synco\n\t"
+      "icbi   @%0\n\t"
+
+      "jmp    @%0\n\t"
+      "nop\n"
+
+      ".align 2\n"
+      "3: .long 4f\n"
+      "4:"
+      : "=&r" (__tempval),"=&r"(__rteval)
+      : "r"   (0x20000000),"r"(addr));
+  return __rteval;
+}
+
+#define UTLB_ADDR_ARRAY  0xf6000000
+#define UTLB_DATA_ARRAY  0xf7000000
+void dump_utlb()
+{
+  int i;
+  unsigned int ptr, val;
+  int valid;
+
+  cprintf("-- UTLB on cpu%d --\n", cpunum());
+  for(i = 0; i < 64; i++) {
+    ptr = (UTLB_ADDR_ARRAY | i << 8);
+    val = get_val_in_P2(ptr);
+    valid = val & 0x00000100 ? 1 : 0;
+    val &= 0xfffff000;
+    if (valid) {
+      ptr = (UTLB_DATA_ARRAY | i << 8);
+      unsigned int pa = get_val_in_P2(ptr) & 0xfffff000;
+      cprintf("[%d] %d va=0x%x pa=0x%x\n", i, valid, val, pa);
+    }
+  }
 }

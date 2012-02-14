@@ -9,6 +9,13 @@ start:
   mov.l   CCR_INIT, r1
   mov.l   r1, @r0
 
+  /* invalidate all cache entries */
+  mova    invalidate_cache, r0
+  mov.l   P2_AREA_MASK, r1
+  or      r1, r0
+  jsr     @r0
+  nop
+
   /* initialize status registers */
   mov.l   SR_INIT, r1
   ldc     r1, sr
@@ -66,10 +73,24 @@ smp_start:
   nop
 
 .align 4
+invalidate_cache:
+    mov.l   CCR_REG, r0
+    mov.l   @r0, r2
+    mov.l 	CCR_INVALID, r1
+    or     	r2, r1
+    mov.l   r1, @r0
+    rts  
+    nop  
+
+.align 4
 CCR_REG:
   .long 0xff00001c
+CCR_INVALID:
+  .long 0x808
 CCR_INIT:
   .long 0x90b
+P2_AREA_MASK:
+  .long 0xA0000000
 SR_INIT:
   .long 0x70000000
 VBR_INIT:
