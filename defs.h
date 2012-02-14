@@ -81,6 +81,7 @@ void            lapiceoi(void);
 void            lapicinit(int);
 void            lapicstartap(uchar, uint);
 void            microdelay(int);
+#endif
 
 // log.c
 void            initlog(void);
@@ -88,6 +89,7 @@ void            log_write(struct buf*);
 void            begin_trans();
 void            commit_trans();
 
+#if 0
 // mp.c
 extern int      ismp;
 int             mpbcpu(void);

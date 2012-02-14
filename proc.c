@@ -20,6 +20,11 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+//__attribute__((section(".ldata")))
+//struct cpu *cpu = 0;       // This cpu.
+//__attribute__((section(".ldata")))
+//struct proc *proc = 0;     // Current proc on this cpu.
+
 void
 pinit(void)
 {

@@ -16,4 +16,8 @@ SECTIONS
         . = ALIGN(32);
     }
     __bss_end = .;
+
+    . = 0xe55f0000;
+    cpu = .;
+    proc = . + 4;
 }
