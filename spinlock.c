@@ -35,10 +35,20 @@ acquire(struct spinlock *lk)
   while(xchg(&lk->locked, 1) != 0)
     ;
 #else
-  // TODO: smp
-  while(lk->locked != 0)
-    ;
-  lk->locked = 1;
+  unsigned long tmp;
+
+  __asm__ __volatile__ (
+      "\n\t1:"
+      "\n\tmovli.l  @%1, %0"
+      "\n\tcmp/pl   %0"
+      "\n\tbt       1b"
+      "\n\tmov      #1, %0"
+      "\n\tmovco.l  %0, @%1"
+      "\n\tbf       1b"
+      : "=&z" (tmp) // 'z' means to use r0
+      : "r" (&lk->locked)
+      : "t", "memory"
+      );
 #endif
 
   // Record info about lock acquisition for debugging.
@@ -68,7 +78,7 @@ release(struct spinlock *lk)
 #if 0
   xchg(&lk->locked, 0);
 #else
-  // TODO: smp
+  // It does not require additional sync in unlock.
   lk->locked = 0;
 #endif
 
