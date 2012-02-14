@@ -89,9 +89,11 @@ static void
 mpmain(void)
 {
   cprintf("cpu%d: starting\n", cpu->id);
+  //slave_tvinit();
   cpu->started = 1;
   if (cpu->id != 0)
       while(1);
+  cprintf("cpu%d: vectors=0x%x\n", cpunum(), vectors);
   scheduler();     // start running processes
 }
 

@@ -170,7 +170,7 @@ void            tvinit(void);
 #else
 // trap.c
 extern uint     ticks;
-extern handler_t  vectors[];
+extern handler_t  *vectors;
 void            tvinit(void);
 void            register_handler(uint evt, handler_t handler);
 #endif

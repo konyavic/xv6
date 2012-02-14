@@ -224,8 +224,8 @@ typedef struct{
 #define IPRA_TMU3(n) (*IPRL = ((*IPRL & 0xffffff00) | (n << 0 )))
 
 #elif defined(RP1)
-//#define TMU (*(volatile tmu *)0xffc10000)
 #define TMU (*(volatile tmu *)0xffc20000)
+#define TMU_SLAVE (*(volatile tmu *)0xffc10000)
 
 #define TMU1_INTEVT 0x420
 #define TMU2_INTEVT 0x440
@@ -244,7 +244,6 @@ typedef struct{
 #define IPRA_TMU2(n) (*IPRA = ((*IPRA & 0xfffff0ff) | (n << 8)))
 #define IPRA_TMU3(n) (*IPRA = ((*IPRA & 0xffff0fff) | (n << 12)))
 #define IPRA_TMU4(n) (*IPRA = ((*IPRA & 0xfff0ffff) | (n << 16)))
-//#define IPRA_TMU5(n) (*IPRA = ((*IPRA & 0xff0fffff) | (n << 20)))
 #define IPRA_TMU5(n) (*IPRA = ((*IPRA & 0xff0fffff) | (n << 20)))
 
 #elif defined(SH7751)

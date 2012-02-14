@@ -7,7 +7,7 @@
 #include "sh4.h"
 #include "spinlock.h"
 
-handler_t vectors[VECTOR_SIZE];
+static handler_t __vectors[NCPU][VECTOR_SIZE];
 struct spinlock tickslock;
 uint ticks;
 
@@ -17,8 +17,28 @@ void
 tvinit(void)
 {
   initlock(&tickslock, "time");
+  vectors = __vectors[cpunum()];
   int i;
-  for (i = 0; i < NELEM(vectors); ++i) {
+  for (i = 0; i < VECTOR_SIZE; ++i) {
+    vectors[i] = (handler_t) trap;
+  }
+
+  // machine-independant events
+  register_handler(TLB_R_EXPEVT, do_tlb_miss);
+  register_handler(TLB_W_EXPEVT, do_tlb_miss);
+  register_handler(PERM_R_EXPEVT, do_tlb_violation);
+  register_handler(PERM_W_EXPEVT, do_tlb_violation);
+  register_handler(ADDR_R_EXPEVT, do_tlb_violation);
+  register_handler(ADDR_W_EXPEVT, do_tlb_violation);
+  register_handler(SYSCALL_EXPEVT, syscall);
+}
+
+void
+slave_tvinit(void)
+{
+  vectors = __vectors[cpunum()];
+  int i;
+  for (i = 0; i < VECTOR_SIZE; ++i) {
     vectors[i] = (handler_t) trap;
   }
 
@@ -45,7 +65,7 @@ void register_handler(uint evt, handler_t handler)
 void
 trap(uint evt)
 {
-  cprintf("unexpected trap EVT=0x%x\n", evt << 3);
+  cprintf("cpu%d: unexpected trap EVT=0x%x\n", cpunum(), evt << 3);
   while(1);
   return;
 }

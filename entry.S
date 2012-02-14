@@ -153,6 +153,7 @@ excp_no_change:
 
   /* call the service routine */
   mov.l excp_vectors, r1
+  mov.l @r1, r1
   shlr2 r4
   shlr  r4
   add   r4, r1    ! r1 = vectors + EXPEVT >> 3
@@ -292,6 +293,7 @@ tlb_exception:
 
   /* call the service routine */
   mov.l tlb_vectors, r1
+  mov.l @r1, r1
   shlr2 r4
   shlr  r4
   add   r4, r1  ! r1 = vectors + EXPEVT >> 3
@@ -419,6 +421,7 @@ intr_no_change:
   
   /* call the service routine */
   mov.l intr_vectors, r1
+  mov.l @r1, r1
   shlr2 r4
   shlr  r4
   add   r4, r1    ! r1 = vectors + INTEVT >> 3
