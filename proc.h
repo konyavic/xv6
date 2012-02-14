@@ -35,9 +35,13 @@ extern int ncpu;
 extern struct cpu *cpu asm("%gs:0");       // &cpus[cpunum()]
 extern struct proc *proc asm("%gs:4");     // cpus[cpunum()].proc
 #else
+// Per-CPU variables are implemented by local memory.
 extern struct cpu *cpu;       // This cpu.
 extern struct proc *proc;     // Current proc on this cpu.
 #define CPUID   0xff000048
+static inline uchar cpunum() {
+    return *(unsigned int *)CPUID;
+}
 #endif
 
 //PAGEBREAK: 17

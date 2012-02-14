@@ -41,9 +41,8 @@ seginit(void)
   cpu = c;
   proc = 0;
 # else
-  // MP is not supported
   // SH4 has no segment
-  cpu = &cpus[0];
+  cpu = &cpus[cpunum()];
   proc = 0;
 #endif
 }

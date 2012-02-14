@@ -42,23 +42,6 @@ main(void)
   mpmain();
 }
 
-// Other CPUs jump here from entryother.S.
-void
-mpenter(void)
-{
-  static uchar id = 1;
-  cpu = &cpus[id++];
-  cprintf("cpu%d: mpenter\n", cpu->id);
-  cpu->started = 1;
-  while(1);
-#if 0
-  switchkvm(); 
-  seginit();
-  lapicinit(cpunum());
-  mpmain();
-#endif
-}
-
 #define RESETVEC_BASE 0xFE400008
 #define STBCR_BASE 0xFE400004
 #define STBCR_MSTP  0x00000001
@@ -91,41 +74,38 @@ void slave_boot(unsigned int start_pc, int id)
   cprintf("CPU%d Wakeup!!\n",id);
 }
 
+// Other CPUs jump here from entryother.S.
+void
+mpenter(void)
+{
+  switchkvm(); 
+  seginit();
+  //lapicinit(cpunum()); //XXX init timer
+  mpmain();
+}
+
 // Common CPU setup code.
 static void
 mpmain(void)
 {
   cprintf("cpu%d: starting\n", cpu->id);
   cpu->started = 1;
+  if (cpu->id != 0)
+      while(1);
   scheduler();     // start running processes
 }
 
-#if 0
-pde_t entrypgdir[];  // For entry.S
-#endif
 
 // Start the non-boot (AP) processors.
 static void
 startothers(void)
 {
-  cprintf("%s\n", __func__);
-#if 0
-  extern uchar _binary_entryother_start[], _binary_entryother_size[];
-  uchar *code;
-#endif
   struct cpu *c;
   char *stack;
 
-#if 0
-  // Write entry code to unused memory at 0x7000.
-  // The linker has placed the image of entryother.S in
-  // _binary_entryother_start.
-  code = p2v(0x7000);
-  memmove(code, _binary_entryother_start, (uint)_binary_entryother_size);
-#endif
 
   for(c = cpus; c < cpus+ncpu; c++){
-    if(c == cpus)  // We've started already.
+    if(c == cpus+cpunum())  // We've started already.
       continue;
 
 #if 0
