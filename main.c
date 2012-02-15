@@ -92,6 +92,7 @@ mpenter(void)
   seginit();
   //lapicinit(cpunum()); //XXX init timer
   slave_tvinit();
+  slave_timer_init();
   mpmain();
 }
 

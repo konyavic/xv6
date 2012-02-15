@@ -134,22 +134,10 @@ typedef volatile int    LIOREG;
 
 #if RP1_CORE_ID == 1
 
-#define IMSK0    ((LIOREG *)(0xfe410824))
-#define IMSK2    ((LIOREG *)(0xfe410844))
-#define IMSKC0   ((LIOREG *)(0xfe410854))
-#define IMSKC2   ((LIOREG *)(0xfe410874))
  
 #elif RP1_CORE_ID == 2
-#define IMSK0    ((LIOREG *)(0xfe410828))
-#define IMSK2    ((LIOREG *)(0xfe410848))
-#define IMSKC0   ((LIOREG *)(0xfe410858))
-#define IMSKC2   ((LIOREG *)(0xfe410878))
  
 #elif RP1_CORE_ID == 3
-#define IMSK0    ((LIOREG *)(0xfe41082c))
-#define IMSK2    ((LIOREG *)(0xfe41084c))
-#define IMSKC0   ((LIOREG *)(0xfe41085c))
-#define IMSKC2   ((LIOREG *)(0xfe41087c))
  
 #else
 /* RP1_CORE_ID == 0 */
@@ -157,6 +145,18 @@ typedef volatile int    LIOREG;
 #define IMSK2    ((LIOREG *)(0xfe410840))
 #define IMSKC0   ((LIOREG *)(0xfe410850))
 #define IMSKC2   ((LIOREG *)(0xfe410870))
+#define C1IMSK0    ((LIOREG *)(0xfe410824))
+#define C1IMSK2    ((LIOREG *)(0xfe410844))
+#define C1IMSKC0   ((LIOREG *)(0xfe410854))
+#define C1IMSKC2   ((LIOREG *)(0xfe410874))
+#define C2IMSK0    ((LIOREG *)(0xfe410828))
+#define C2IMSK2    ((LIOREG *)(0xfe410848))
+#define C2IMSKC0   ((LIOREG *)(0xfe410858))
+#define C2IMSKC2   ((LIOREG *)(0xfe410878))
+#define C3IMSK0    ((LIOREG *)(0xfe41082c))
+#define C3IMSK2    ((LIOREG *)(0xfe41084c))
+#define C3IMSKC0   ((LIOREG *)(0xfe41085c))
+#define C3IMSKC2   ((LIOREG *)(0xfe41087c))
 #endif
 
 #endif
